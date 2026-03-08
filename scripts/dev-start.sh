@@ -13,6 +13,15 @@ header() { echo -e "\n${BLUE}▶ $1${NC}"; }
 WITH_TOOLS=false
 [[ "$1" == "--with-tools" ]] && WITH_TOOLS=true
 
+# Tìm root dir của project (thư mục chứa script này)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT_DIR="$(dirname "$SCRIPT_DIR")"
+COMPOSE_FILE="$ROOT_DIR/docker/docker-compose.yml"
+COMPOSE="docker compose -f $COMPOSE_FILE"
+
+# Chạy mọi lệnh từ ROOT_DIR
+cd "$ROOT_DIR"
+
 header "Kiểm tra dependencies"
 
 # Check Docker
@@ -35,10 +44,10 @@ header "Khởi động services"
 
 # Start core services
 if $WITH_TOOLS; then
-  docker compose --profile tools up -d
+  $COMPOSE --profile tools up -d
   log "Khởi động core + tools (pgAdmin, Redis Commander)"
 else
-  docker compose up -d postgres redis elasticsearch minio mailhog
+  $COMPOSE up -d postgres redis elasticsearch minio mailhog
   log "Khởi động core services"
 fi
 
@@ -46,7 +55,7 @@ header "Đợi services sẵn sàng"
 
 # Wait for PostgreSQL
 echo -n "  Đợi PostgreSQL"
-until docker compose exec -T postgres pg_isready -q 2>/dev/null; do
+until $COMPOSE exec -T postgres pg_isready -q 2>/dev/null; do
   echo -n "."
   sleep 1
 done
@@ -55,7 +64,7 @@ log "PostgreSQL sẵn sàng"
 
 # Wait for Redis
 echo -n "  Đợi Redis"
-until docker compose exec -T redis redis-cli -a "${REDIS_PASSWORD:-redis_pass_local}" ping 2>/dev/null | grep -q PONG; do
+until $COMPOSE exec -T redis redis-cli -a "${REDIS_PASSWORD:-redis_pass_local}" ping 2>/dev/null | grep -q PONG; do
   echo -n "."
   sleep 1
 done
