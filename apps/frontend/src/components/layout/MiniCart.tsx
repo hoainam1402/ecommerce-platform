@@ -2,157 +2,124 @@
 import { useEffect } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
-import { X, ShoppingCart, Minus, Plus, Trash2, ArrowRight } from 'lucide-react'
+import { X, ShoppingCart, Plus, Minus, Trash2, ArrowRight } from 'lucide-react'
 import { cn, formatPrice } from '@/lib/utils'
 import { useCartStore } from '@/stores/cart.store'
-import { Button } from '@/components/ui/Button'
 
 export function MiniCart() {
-  const { cart, isOpen, closeCart, updateItem, removeItem, isLoading } = useCartStore()
+  const { open, setOpen, items, subtotal, itemCount, updateItem, removeItem, fetchCart } = useCartStore()
 
-  // Lock body scroll when open
-  useEffect(() => {
-    document.body.style.overflow = isOpen ? 'hidden' : ''
-    return () => { document.body.style.overflow = '' }
-  }, [isOpen])
+  useEffect(() => { if (open) fetchCart() }, [open])
 
   return (
     <>
-      {/* Overlay */}
-      {isOpen && (
-        <div
-          className="fixed inset-0 bg-black/40 backdrop-blur-sm z-40 animate-fade-in"
-          onClick={closeCart}
-        />
-      )}
+      {/* Backdrop */}
+      <div onClick={() => setOpen(false)}
+        className={cn('fixed inset-0 bg-black/40 z-40 transition-opacity duration-300',
+          open ? 'opacity-100' : 'opacity-0 pointer-events-none')} />
 
       {/* Drawer */}
-      <div className={cn(
-        'fixed top-0 right-0 h-full w-full max-w-sm bg-white z-50 flex flex-col shadow-2xl transition-transform duration-300',
-        isOpen ? 'translate-x-0' : 'translate-x-full',
+      <aside className={cn(
+        'fixed right-0 top-0 h-full w-full sm:w-96 bg-white z-50 shadow-2xl flex flex-col transition-transform duration-300',
+        open ? 'translate-x-0' : 'translate-x-full'
       )}>
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-4 border-b border-border">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-border">
           <div className="flex items-center gap-2">
             <ShoppingCart className="h-5 w-5 text-primary" />
-            <h2 className="font-semibold text-text-primary">
-              Giỏ hàng ({cart?.itemCount ?? 0})
-            </h2>
+            <h2 className="font-display font-bold text-lg">Giỏ hàng</h2>
+            {itemCount > 0 && (
+              <span className="badge-primary">{itemCount}</span>
+            )}
           </div>
-          <button
-            onClick={closeCart}
-            className="h-8 w-8 flex items-center justify-center rounded-lg hover:bg-surface transition-colors"
-          >
-            <X className="h-4 w-4" />
+          <button onClick={() => setOpen(false)} className="btn-ghost p-1.5 rounded-xl">
+            <X className="h-5 w-5" />
           </button>
         </div>
 
         {/* Items */}
-        <div className="flex-1 overflow-y-auto py-2">
-          {!cart || cart.items.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full gap-4 text-text-secondary">
-              <ShoppingCart className="h-16 w-16 opacity-20" />
-              <p className="text-sm">Giỏ hàng trống</p>
-              <Button variant="outline" size="sm" onClick={closeCart}>
+        <div className="flex-1 overflow-y-auto py-4 px-5 space-y-4">
+          {items.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-full gap-4 py-16 text-center">
+              <div className="h-20 w-20 bg-surface rounded-full flex items-center justify-center">
+                <ShoppingCart className="h-9 w-9 text-text-muted" />
+              </div>
+              <div>
+                <p className="font-semibold text-text-primary">Giỏ hàng trống</p>
+                <p className="text-sm text-text-muted mt-1">Thêm sản phẩm để bắt đầu mua sắm</p>
+              </div>
+              <button onClick={() => setOpen(false)} className="btn-primary">
                 Tiếp tục mua sắm
-              </Button>
+              </button>
             </div>
           ) : (
-            <ul className="divide-y divide-border">
-              {cart.items.map(item => (
-                <li key={item.id} className={cn(
-                  'flex gap-3 px-4 py-3',
-                  item.isOutOfStock && 'opacity-50',
-                )}>
-                  {/* Image */}
-                  <div className="relative h-16 w-16 flex-shrink-0 overflow-hidden rounded-lg bg-surface">
-                    <Image
-                      src={item.product.image || '/placeholder-product.jpg'}
-                      alt={item.product.name}
-                      fill className="object-cover"
-                    />
-                  </div>
+            items.map(item => (
+              <div key={item.id} className="flex gap-3">
+                {/* Image */}
+                <div className="relative h-18 w-18 shrink-0 rounded-xl overflow-hidden bg-surface border border-border">
+                  <Image
+                    src={item.product?.image ?? `https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=100&q=80`}
+                    alt={item.product?.name ?? ''}
+                    fill className="object-cover"
+                  />
+                </div>
 
-                  {/* Info */}
-                  <div className="flex-1 min-w-0">
-                    <Link
-                      href={`/products/${item.product.slug}`}
-                      onClick={closeCart}
-                      className="text-sm font-medium line-clamp-2 text-text-primary hover:text-primary transition-colors"
-                    >
-                      {item.product.name}
-                    </Link>
-                    {item.variant && (
-                      <p className="text-xs text-text-secondary mt-0.5">{item.variant.name}</p>
-                    )}
-                    <p className="text-sm font-bold text-primary mt-1">
-                      {formatPrice(item.unitPrice)}
-                    </p>
+                {/* Info */}
+                <div className="flex-1 min-w-0">
+                  <Link href={`/products/${item.product?.slug}`} onClick={() => setOpen(false)}
+                    className="text-sm font-medium text-text-primary hover:text-primary line-clamp-2 leading-snug">
+                    {item.product?.name}
+                  </Link>
+                  {item.variant && (
+                    <p className="text-xs text-text-muted mt-0.5">{item.variant.name}</p>
+                  )}
+                  <p className="font-bold text-accent mt-1">{formatPrice(item.unit_price)}</p>
 
-                    {/* Quantity controls */}
-                    <div className="flex items-center gap-2 mt-2">
-                      <div className="flex items-center border border-border rounded-lg overflow-hidden">
-                        <button
-                          onClick={() => updateItem(item.id, item.quantity - 1)}
-                          disabled={isLoading || item.quantity <= 1}
-                          className="h-7 w-7 flex items-center justify-center hover:bg-surface disabled:opacity-40 transition-colors"
-                        >
-                          <Minus className="h-3 w-3" />
-                        </button>
-                        <span className="h-7 w-8 flex items-center justify-center text-sm font-medium border-x border-border">
-                          {item.quantity}
-                        </span>
-                        <button
-                          onClick={() => updateItem(item.id, item.quantity + 1)}
-                          disabled={isLoading}
-                          className="h-7 w-7 flex items-center justify-center hover:bg-surface disabled:opacity-40 transition-colors"
-                        >
-                          <Plus className="h-3 w-3" />
-                        </button>
-                      </div>
-
-                      <button
-                        onClick={() => removeItem(item.id)}
-                        className="h-7 w-7 flex items-center justify-center text-text-secondary hover:text-accent transition-colors ml-auto"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
+                  {/* Quantity */}
+                  <div className="flex items-center gap-2 mt-2">
+                    <div className="flex items-center border border-border rounded-lg overflow-hidden">
+                      <button onClick={() => updateItem(item.id, item.quantity - 1)}
+                        className="px-2.5 py-1 hover:bg-surface transition-colors">
+                        <Minus className="h-3 w-3" />
+                      </button>
+                      <span className="px-3 py-1 text-sm font-medium min-w-[2rem] text-center border-x border-border">
+                        {item.quantity}
+                      </span>
+                      <button onClick={() => updateItem(item.id, item.quantity + 1)}
+                        className="px-2.5 py-1 hover:bg-surface transition-colors">
+                        <Plus className="h-3 w-3" />
                       </button>
                     </div>
+                    <button onClick={() => removeItem(item.id)}
+                      className="p-1.5 text-text-muted hover:text-danger transition-colors">
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
                   </div>
-                </li>
-              ))}
-            </ul>
+                </div>
+              </div>
+            ))
           )}
         </div>
 
         {/* Footer */}
-        {cart && cart.items.length > 0 && (
-          <div className="border-t border-border p-4 space-y-3 bg-surface/50">
-            <div className="flex items-center justify-between text-sm">
+        {items.length > 0 && (
+          <div className="border-t border-border px-5 py-4 space-y-3 bg-surface/50">
+            <div className="flex items-center justify-between">
               <span className="text-text-secondary">Tạm tính</span>
-              <span className="font-bold text-lg text-text-primary">{formatPrice(cart.subtotal)}</span>
+              <span className="font-display font-bold text-lg">{formatPrice(subtotal)}</span>
             </div>
-            <p className="text-xs text-text-secondary">Phí vận chuyển tính khi thanh toán</p>
+            <p className="text-xs text-text-muted">Phí vận chuyển tính khi thanh toán</p>
             <div className="grid grid-cols-2 gap-2">
-              <Button
-                variant="outline"
-                onClick={closeCart}
-                className="w-full"
-                leftIcon={<ShoppingCart className="h-4 w-4" />}
-              >
-                <Link href="/cart" onClick={closeCart}>Xem giỏ</Link>
-              </Button>
-              <Button
-                variant="primary"
-                className="w-full"
-                rightIcon={<ArrowRight className="h-4 w-4" />}
-              >
-                <Link href="/checkout" onClick={closeCart}>Thanh toán</Link>
-              </Button>
+              <Link href="/cart" onClick={() => setOpen(false)} className="btn-outline text-center">
+                Xem giỏ hàng
+              </Link>
+              <Link href="/checkout" onClick={() => setOpen(false)} className="btn-accent flex items-center justify-center gap-1.5">
+                Thanh toán <ArrowRight className="h-4 w-4" />
+              </Link>
             </div>
           </div>
         )}
-      </div>
+      </aside>
     </>
   )
 }

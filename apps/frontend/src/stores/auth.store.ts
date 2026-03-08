@@ -1,91 +1,53 @@
+'use client'
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { authApi } from '@/lib/api'
 
-interface User {
-  id: string
-  email: string
-  fullName: string
-  avatarUrl?: string
-  role: string
-  loyaltyPoints: number
-  loyaltyTier: string
-}
+interface User { id: string; email: string; full_name: string; role: string; avatar_url?: string; loyalty_points?: number; loyalty_tier?: string }
 
 interface AuthState {
-  user:         User | null
-  accessToken:  string | null
+  user: User | null
+  accessToken: string | null
   refreshToken: string | null
-  isLoading:    boolean
+  loading: boolean
 
-  login:    (email: string, password: string) => Promise<void>
-  register: (data: any) => Promise<void>
-  logout:   () => Promise<void>
-  fetchMe:  () => Promise<void>
+  login:  (email: string, password: string) => Promise<void>
+  logout: () => void
+  fetchMe: () => Promise<void>
   setTokens: (access: string, refresh: string) => void
 }
 
 export const useAuthStore = create<AuthState>()(
   persist(
-    (set, get) => ({
-      user:         null,
-      accessToken:  null,
-      refreshToken: null,
-      isLoading:    false,
-
-      setTokens: (accessToken, refreshToken) => {
-        localStorage.setItem('access_token', accessToken)
-        localStorage.setItem('refresh_token', refreshToken)
-        set({ accessToken, refreshToken })
-      },
+    (set) => ({
+      user: null, accessToken: null, refreshToken: null, loading: false,
 
       login: async (email, password) => {
-        set({ isLoading: true })
+        set({ loading: true })
         try {
-          const data: any = await authApi.login({ email, password })
-          get().setTokens(data.accessToken, data.refreshToken)
-          set({ user: data.user, isLoading: false })
-        } catch (err) {
-          set({ isLoading: false })
-          throw err
+          const res = await authApi.login(email, password)
+          const { accessToken, refreshToken, user } = res.data
+          set({ accessToken, refreshToken, user, loading: false })
+        } catch (e) {
+          set({ loading: false })
+          throw e
         }
       },
 
-      register: async (data) => {
-        set({ isLoading: true })
-        try {
-          const res: any = await authApi.register(data)
-          get().setTokens(res.accessToken, res.refreshToken)
-          set({ user: res.user, isLoading: false })
-        } catch (err) {
-          set({ isLoading: false })
-          throw err
-        }
-      },
-
-      logout: async () => {
-        try { await authApi.logout() } catch {}
-        localStorage.removeItem('access_token')
-        localStorage.removeItem('refresh_token')
+      logout: () => {
+        authApi.logout().catch(() => {})
         set({ user: null, accessToken: null, refreshToken: null })
       },
 
       fetchMe: async () => {
         try {
-          const user: any = await authApi.me()
-          set({ user })
-        } catch {
-          set({ user: null })
-        }
+          const res = await authApi.me()
+          set({ user: res.data })
+        } catch { set({ user: null, accessToken: null }) }
       },
+
+      setTokens: (access, refresh) => set({ accessToken: access, refreshToken: refresh }),
     }),
-    {
-      name: 'auth-storage',
-      partialize: (s) => ({
-        user: s.user,
-        accessToken: s.accessToken,
-        refreshToken: s.refreshToken,
-      }),
-    },
-  ),
+    { name: 'auth-storage', partialize: (s) => ({ accessToken: s.accessToken, refreshToken: s.refreshToken, user: s.user }) }
+  )
 )

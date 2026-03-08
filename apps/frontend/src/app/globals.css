@@ -4,67 +4,77 @@
 
 @layer base {
   *, *::before, *::after { box-sizing: border-box; }
-
-  html {
-    scroll-behavior: smooth;
-    -webkit-font-smoothing: antialiased;
-  }
-
-  body {
-    @apply bg-white text-text-primary;
-  }
-
-  /* Custom scrollbar */
-  ::-webkit-scrollbar        { width: 6px; height: 6px; }
+  html { scroll-behavior: smooth; -webkit-font-smoothing: antialiased; }
+  body { @apply bg-white text-text-primary; }
+  ::-webkit-scrollbar        { width: 5px; height: 5px; }
   ::-webkit-scrollbar-track  { @apply bg-surface; }
   ::-webkit-scrollbar-thumb  { @apply bg-border rounded-full; }
-  ::-webkit-scrollbar-thumb:hover { @apply bg-text-secondary; }
 }
 
 @layer components {
-  .container-page {
-    @apply max-w-7xl mx-auto px-4 sm:px-6 lg:px-8;
-  }
+  .container-page { @apply max-w-7xl mx-auto px-4 sm:px-6 lg:px-8; }
 
-  .section-title {
-    @apply font-display font-bold text-xl md:text-2xl text-text-primary;
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 font-semibold rounded-xl
+           transition-all duration-200 select-none cursor-pointer
+           disabled:opacity-50 disabled:pointer-events-none;
   }
-
-  .badge-sale {
-    @apply bg-accent text-white text-xs font-bold px-2 py-0.5 rounded-md;
+  .btn-primary {
+    @apply btn bg-primary text-white hover:bg-primary-800 active:scale-[.98]
+           shadow-sm hover:shadow-md px-5 py-2.5 text-sm;
   }
-
-  .badge-new {
-    @apply bg-success text-white text-xs font-bold px-2 py-0.5 rounded-md;
+  .btn-accent {
+    @apply btn bg-accent text-white hover:bg-orange-600 active:scale-[.98]
+           shadow-sm hover:shadow-md px-5 py-2.5 text-sm;
   }
-
-  .badge-hot {
-    @apply bg-warning text-white text-xs font-bold px-2 py-0.5 rounded-md;
+  .btn-outline {
+    @apply btn border border-border bg-white text-text-primary hover:border-primary
+           hover:text-primary active:scale-[.98] px-5 py-2.5 text-sm;
   }
+  .btn-ghost {
+    @apply btn text-text-secondary hover:text-primary hover:bg-surface
+           active:scale-[.98] px-3 py-2 text-sm;
+  }
+  .btn-sm { @apply px-3 py-1.5 text-xs; }
+  .btn-lg { @apply px-7 py-3.5 text-base; }
 
   .input-base {
-    @apply w-full h-10 px-3 rounded-lg border border-border bg-white text-sm
-           focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary
-           placeholder:text-text-secondary disabled:opacity-50 disabled:bg-surface
-           transition-colors;
+    @apply w-full px-3.5 py-2.5 rounded-xl border border-border bg-white text-sm
+           focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/10
+           placeholder:text-text-muted transition-all;
   }
 
-  .card-hover {
-    @apply transition-all duration-300 hover:shadow-card-hover hover:-translate-y-0.5;
+  .card {
+    @apply bg-white rounded-2xl border border-border shadow-card
+           hover:shadow-card-hover transition-all duration-300;
   }
+
+  .badge {
+    @apply inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-md;
+  }
+  .badge-sale    { @apply badge bg-danger/10 text-danger; }
+  .badge-new     { @apply badge bg-success/10 text-success; }
+  .badge-hot     { @apply badge bg-warning/10 text-warning; }
+  .badge-primary { @apply badge bg-primary/10 text-primary; }
+
+  .section-title {
+    @apply font-display font-bold text-xl md:text-2xl text-text-primary tracking-tight;
+  }
+
+  .skeleton {
+    @apply bg-gradient-to-r from-slate-100 via-slate-200 to-slate-100
+           bg-[length:200%_100%] animate-shimmer rounded-lg;
+  }
+
+  .price-current  { @apply font-display font-bold text-danger text-lg leading-none; }
+  .price-original { @apply text-text-muted text-sm line-through; }
 }
 
 @layer utilities {
-  .text-balance { text-wrap: balance; }
-  .scrollbar-hide {
-    -ms-overflow-style: none;
-    scrollbar-width: none;
-  }
+  .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
   .scrollbar-hide::-webkit-scrollbar { display: none; }
-
-  /* Price strikethrough */
-  .line-through-accent {
-    text-decoration: line-through;
-    text-decoration-color: theme('colors.accent');
-  }
+  .text-balance { text-wrap: balance; }
+  .stagger-1 { animation-delay: .1s; }
+  .stagger-2 { animation-delay: .2s; }
+  .stagger-3 { animation-delay: .3s; }
 }

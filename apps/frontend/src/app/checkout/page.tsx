@@ -1,290 +1,258 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { Check, ChevronRight, MapPin, Truck, CreditCard } from 'lucide-react'
-import { useQuery } from '@tanstack/react-query'
+import { Check, MapPin, Truck, CreditCard, ChevronRight, Loader2 } from 'lucide-react'
 import { useCartStore } from '@/stores/cart.store'
-import { userApi, orderApi, cartApi } from '@/lib/api'
-import { Button } from '@/components/ui/Button'
+import { useAuthStore } from '@/stores/auth.store'
+import { orderApi, userApi } from '@/lib/api'
 import { cn, formatPrice } from '@/lib/utils'
-
-const STEPS = [
-  { id: 1, label: 'Địa chỉ giao hàng', icon: MapPin },
-  { id: 2, label: 'Vận chuyển',         icon: Truck },
-  { id: 3, label: 'Thanh toán',         icon: CreditCard },
-]
-
-const SHIPPING_PROVIDERS = [
-  { value: 'ghn',          label: 'GHN — Giao nhanh',     days: '1-2 ngày', fee: 30_000 },
-  { value: 'ghtk',         label: 'GHTK — Tiêu chuẩn',   days: '2-3 ngày', fee: 15_000 },
-  { value: 'viettel_post', label: 'ViettelPost — Cơ bản', days: '3-5 ngày', fee: 10_000 },
-]
+import Link from 'next/link'
 
 const PAYMENT_METHODS = [
-  { value: 'vnpay',   label: 'VNPay / ATM / QR',       logo: '🏦' },
-  { value: 'momo',    label: 'Ví MoMo',                 logo: '🟣' },
-  { value: 'zalopay', label: 'ZaloPay',                 logo: '🔵' },
-  { value: 'stripe',  label: 'Thẻ Visa / Mastercard',  logo: '💳' },
-  { value: 'cod',     label: 'Thanh toán khi nhận hàng', logo: '💵' },
+  { value: 'vnpay',   label: 'VNPay',           sub: 'ATM / QR / Internet Banking', emoji: '🏦' },
+  { value: 'momo',    label: 'Ví MoMo',          sub: 'Quét QR MoMo',                emoji: '💳' },
+  { value: 'stripe',  label: 'Thẻ Visa/Master',  sub: 'Thanh toán quốc tế',          emoji: '💎' },
+  { value: 'cod',     label: 'Tiền mặt (COD)',    sub: 'Trả khi nhận hàng',           emoji: '💵' },
+]
+
+const SHIP_PROVIDERS = [
+  { value: 'ghn',         label: 'Giao Hàng Nhanh',  sub: 'Giao 1-2 ngày',  fee: 30000 },
+  { value: 'ghtk',        label: 'Giao Hàng Tiết Kiệm', sub: 'Giao 2-3 ngày', fee: 15000 },
+  { value: 'viettel_post',label: 'ViettelPost',      sub: 'Giao 3-5 ngày',  fee: 10000 },
+]
+
+const STEPS = [
+  { id: 1, label: 'Địa chỉ',    icon: MapPin },
+  { id: 2, label: 'Vận chuyển', icon: Truck },
+  { id: 3, label: 'Thanh toán', icon: CreditCard },
 ]
 
 export default function CheckoutPage() {
-  const router = useRouter()
-  const { cart, fetchCart } = useCartStore()
+  const router  = useRouter()
+  const { user } = useAuthStore()
+  const { items, subtotal, clear } = useCartStore()
 
-  const [step, setStep]                       = useState(1)
-  const [selectedAddress, setSelectedAddress] = useState<string>('')
-  const [provider, setProvider]               = useState('ghn')
-  const [payment, setPayment]                 = useState('vnpay')
-  const [note, setNote]                       = useState('')
-  const [usePoints, setUsePoints]             = useState(false)
-  const [loading, setLoading]                 = useState(false)
+  const [step,      setStep]      = useState(1)
+  const [addresses, setAddresses] = useState<any[]>([])
+  const [addrId,    setAddrId]    = useState<string | null>(null)
+  const [provider,  setProvider]  = useState('ghn')
+  const [payment,   setPayment]   = useState('cod')
+  const [note,      setNote]      = useState('')
+  const [loading,   setLoading]   = useState(false)
+  const [error,     setError]     = useState('')
 
-  const { data: addresses } = useQuery({
-    queryKey: ['addresses'],
-    queryFn:  () => userApi.getAddresses(),
-  })
-  const addrList: any[] = Array.isArray(addresses) ? addresses : []
+  const selectedProvider = SHIP_PROVIDERS.find(p => p.value === provider)!
+  const shipping = subtotal > 299000 ? 0 : selectedProvider.fee
+  const total    = subtotal + shipping
 
-  // Auto-select default address
-  if (addrList.length > 0 && !selectedAddress) {
-    const def = addrList.find(a => a.isDefault) ?? addrList[0]
-    setSelectedAddress(def.id)
-  }
+  useEffect(() => {
+    if (!user) { router.push('/login?redirect=/checkout'); return }
+    userApi.addresses().then(res => {
+      const list = res.data ?? []
+      setAddresses(list)
+      const def = list.find((a: any) => a.is_default) ?? list[0]
+      if (def) setAddrId(def.id)
+    }).catch(() => {})
+  }, [user])
 
-  const selectedProv = SHIPPING_PROVIDERS.find(p => p.value === provider)!
-  const subtotal     = cart?.subtotal ?? 0
-  const shippingFee  = subtotal >= 300_000 ? 0 : selectedProv.fee
-  const total        = subtotal + shippingFee
-
-  const placeOrder = async () => {
-    if (!selectedAddress) return
-    setLoading(true)
+  const handlePlaceOrder = async () => {
+    if (!addrId) { setError('Vui lòng chọn địa chỉ giao hàng'); return }
+    setLoading(true); setError('')
     try {
-      const order: any = await orderApi.create({
-        addressId:        selectedAddress,
-        paymentMethod:    payment,
-        shippingProvider: provider,
-        pointsToUse:      usePoints ? undefined : 0,
-        note,
+      const res = await orderApi.create({
+        address_id: addrId,
+        payment_method: payment,
+        shipping_provider: provider,
+        note: note || undefined,
       })
-
-      await fetchCart()
-
-      if (payment === 'cod') {
-        router.push(`/orders/${order.id}/success`)
-      } else {
-        const payRes: any = await fetch(`/api/payments/${order.id}/initiate`, { method: 'POST' })
-          .then(r => r.json())
-        window.location.href = payRes.paymentUrl ?? `/orders/${order.id}/success`
-      }
-    } catch (err: any) {
-      alert(err?.error?.message ?? 'Đặt hàng thất bại. Vui lòng thử lại.')
-    } finally {
-      setLoading(false)
-    }
+      const orderId = res.data?.id
+      clear()
+      router.push(`/orders/${orderId}/success`)
+    } catch (e: any) {
+      setError(e.response?.data?.error?.message || 'Có lỗi xảy ra, vui lòng thử lại')
+    } finally { setLoading(false) }
   }
+
+  if (items.length === 0 && !loading) return (
+    <div className="container-page py-24 text-center">
+      <p className="font-bold text-xl">Giỏ hàng trống</p>
+      <Link href="/products" className="btn-primary mt-5 inline-flex">Mua sắm ngay</Link>
+    </div>
+  )
 
   return (
-    <div className="container-page py-6 max-w-5xl">
-      <h1 className="text-2xl font-bold mb-6">Thanh toán</h1>
+    <div className="container-page py-7 max-w-5xl">
+      <h1 className="font-display font-bold text-2xl mb-7">Thanh toán</h1>
 
       {/* Step indicator */}
       <div className="flex items-center mb-8">
-        {STEPS.map((s, idx) => (
-          <div key={s.id} className="flex items-center flex-1">
-            <button
-              onClick={() => step > s.id && setStep(s.id)}
-              className={cn('flex items-center gap-2 group',
-                step > s.id ? 'cursor-pointer' : 'cursor-default')}>
-              <div className={cn(
-                'h-9 w-9 rounded-full flex items-center justify-center text-sm font-bold transition-colors flex-shrink-0',
-                step > s.id  ? 'bg-success text-white' :
-                step === s.id ? 'bg-primary text-white' :
-                'bg-border text-text-secondary',
-              )}>
+        {STEPS.map((s, i) => (
+          <div key={s.id} className="flex items-center flex-1 last:flex-none">
+            <div className={cn('flex items-center gap-2.5 cursor-pointer', step >= s.id ? 'text-primary' : 'text-text-muted')}
+              onClick={() => step > s.id && setStep(s.id)}>
+              <div className={cn('h-9 w-9 rounded-full flex items-center justify-center text-sm font-bold border-2 transition-all',
+                step > s.id  ? 'bg-success border-success text-white' :
+                step === s.id ? 'border-primary bg-primary/5 text-primary' :
+                'border-border text-text-muted')}>
                 {step > s.id ? <Check className="h-4 w-4" /> : s.id}
               </div>
-              <span className={cn('text-sm font-medium hidden sm:block',
-                step === s.id ? 'text-primary' : step > s.id ? 'text-success' : 'text-text-secondary',
-              )}>
-                {s.label}
-              </span>
-            </button>
-            {idx < STEPS.length - 1 && (
-              <div className={cn('flex-1 h-0.5 mx-3',
-                step > s.id ? 'bg-success' : 'bg-border')} />
+              <span className={cn('text-sm font-semibold hidden sm:block', step === s.id && 'text-primary')}>{s.label}</span>
+            </div>
+            {i < STEPS.length - 1 && (
+              <div className={cn('flex-1 h-0.5 mx-3 transition-colors', step > s.id ? 'bg-success' : 'bg-border')} />
             )}
           </div>
         ))}
       </div>
 
-      <div className="grid lg:grid-cols-3 gap-6 items-start">
-        {/* Step content */}
-        <div className="lg:col-span-2">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-7">
+        {/* Main */}
+        <div className="lg:col-span-2 space-y-5">
 
           {/* Step 1: Address */}
           {step === 1 && (
-            <div className="bg-white rounded-2xl shadow-card p-5 space-y-4">
-              <h2 className="font-semibold text-text-primary">Chọn địa chỉ giao hàng</h2>
-              {addrList.length === 0 ? (
-                <p className="text-sm text-text-secondary">Bạn chưa có địa chỉ. Vui lòng thêm địa chỉ mới.</p>
+            <div className="card p-5 animate-fade-in space-y-4">
+              <h2 className="font-bold flex items-center gap-2"><MapPin className="h-5 w-5 text-primary" /> Địa chỉ giao hàng</h2>
+
+              {addresses.length === 0 ? (
+                <div className="text-center py-8">
+                  <p className="text-text-muted mb-4">Bạn chưa có địa chỉ nào</p>
+                  <Link href="/account?tab=addresses" className="btn-outline">Thêm địa chỉ</Link>
+                </div>
               ) : (
                 <div className="space-y-3">
-                  {addrList.map(addr => (
+                  {addresses.map(addr => (
                     <label key={addr.id}
-                      className={cn(
-                        'flex items-start gap-3 p-4 border-2 rounded-xl cursor-pointer transition-colors',
-                        selectedAddress === addr.id ? 'border-primary bg-primary-50' : 'border-border hover:border-primary-light',
-                      )}>
-                      <input type="radio" name="address"
-                        value={addr.id} checked={selectedAddress === addr.id}
-                        onChange={() => setSelectedAddress(addr.id)}
+                      className={cn('flex items-start gap-3 p-4 rounded-xl border-2 cursor-pointer transition-colors',
+                        addrId === addr.id ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/30')}>
+                      <input type="radio" name="address" value={addr.id}
+                        checked={addrId === addr.id} onChange={() => setAddrId(addr.id)}
                         className="mt-0.5 accent-primary" />
-                      <div>
-                        <p className="font-medium text-sm">
-                          {addr.recipientName} — {addr.recipientPhone}
-                          {addr.isDefault && <span className="ml-2 text-xs text-primary bg-primary-50 px-2 py-0.5 rounded-full">Mặc định</span>}
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <p className="font-semibold text-sm">{addr.recipient_name}</p>
+                          <span className="text-xs text-text-muted">{addr.recipient_phone}</span>
+                          {addr.is_default && <span className="badge-primary text-[10px]">Mặc định</span>}
+                        </div>
+                        <p className="text-sm text-text-secondary mt-0.5">
+                          {addr.street_address}, {addr.ward}, {addr.district}, {addr.province}
                         </p>
-                        <p className="text-xs text-text-secondary mt-0.5">
-                          {addr.streetAddress}, {addr.ward}, {addr.district}, {addr.province}
-                        </p>
-                        {addr.label && <p className="text-xs text-text-secondary">{addr.label}</p>}
+                        {addr.label && <p className="text-xs text-text-muted mt-0.5">📍 {addr.label}</p>}
                       </div>
                     </label>
                   ))}
                 </div>
               )}
-              <Button variant="outline" size="sm">+ Thêm địa chỉ mới</Button>
-              <div className="flex justify-end">
-                <Button variant="primary" onClick={() => setStep(2)}
-                  disabled={!selectedAddress}
-                  rightIcon={<ChevronRight className="h-4 w-4" />}>
-                  Tiếp tục
-                </Button>
-              </div>
+
+              <button onClick={() => setStep(2)} disabled={!addrId}
+                className="btn-primary w-full gap-2 mt-2">
+                Tiếp tục <ChevronRight className="h-4 w-4" />
+              </button>
             </div>
           )}
 
           {/* Step 2: Shipping */}
           {step === 2 && (
-            <div className="bg-white rounded-2xl shadow-card p-5 space-y-4">
-              <h2 className="font-semibold text-text-primary">Phương thức vận chuyển</h2>
+            <div className="card p-5 animate-fade-in space-y-4">
+              <h2 className="font-bold flex items-center gap-2"><Truck className="h-5 w-5 text-primary" /> Phương thức vận chuyển</h2>
+
               <div className="space-y-3">
-                {SHIPPING_PROVIDERS.map(prov => (
-                  <label key={prov.value}
-                    className={cn(
-                      'flex items-center justify-between p-4 border-2 rounded-xl cursor-pointer transition-colors',
-                      provider === prov.value ? 'border-primary bg-primary-50' : 'border-border hover:border-primary-light',
-                    )}>
-                    <div className="flex items-center gap-3">
-                      <input type="radio" name="provider" value={prov.value}
-                        checked={provider === prov.value}
-                        onChange={() => setProvider(prov.value)}
-                        className="accent-primary" />
-                      <div>
-                        <p className="font-medium text-sm">{prov.label}</p>
-                        <p className="text-xs text-text-secondary">{prov.days}</p>
-                      </div>
+                {SHIP_PROVIDERS.map(p => (
+                  <label key={p.value}
+                    className={cn('flex items-center gap-3 p-4 rounded-xl border-2 cursor-pointer transition-colors',
+                      provider === p.value ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/30')}>
+                    <input type="radio" name="provider" value={p.value}
+                      checked={provider === p.value} onChange={() => setProvider(p.value)}
+                      className="accent-primary" />
+                    <div className="flex-1">
+                      <p className="font-semibold text-sm">{p.label}</p>
+                      <p className="text-xs text-text-muted">{p.sub}</p>
                     </div>
-                    <span className={cn('text-sm font-semibold',
-                      subtotal >= 300_000 ? 'text-success' : 'text-text-primary')}>
-                      {subtotal >= 300_000 ? 'Miễn phí' : formatPrice(prov.fee)}
+                    <span className="font-bold text-sm text-primary">
+                      {subtotal > 299000 ? <span className="text-success">Miễn phí</span> : formatPrice(p.fee)}
                     </span>
                   </label>
                 ))}
               </div>
+
               <div>
-                <label className="text-sm font-medium block mb-1.5">Ghi chú đơn hàng (tùy chọn)</label>
-                <textarea
-                  value={note} onChange={e => setNote(e.target.value)}
-                  placeholder="Ghi chú cho người giao hàng..."
-                  rows={3}
-                  className="input-base resize-none"
-                />
+                <label className="text-sm font-medium text-text-secondary block mb-1.5">Ghi chú đơn hàng (tuỳ chọn)</label>
+                <textarea value={note} onChange={e => setNote(e.target.value)}
+                  rows={3} placeholder="Nhập ghi chú cho shipper..."
+                  className="input-base resize-none" />
               </div>
-              <div className="flex justify-between">
-                <Button variant="ghost" onClick={() => setStep(1)}>← Quay lại</Button>
-                <Button variant="primary" onClick={() => setStep(3)}
-                  rightIcon={<ChevronRight className="h-4 w-4" />}>Tiếp tục</Button>
+
+              <div className="flex gap-3">
+                <button onClick={() => setStep(1)} className="btn-outline flex-1">← Quay lại</button>
+                <button onClick={() => setStep(3)} className="btn-primary flex-1 gap-2">
+                  Tiếp tục <ChevronRight className="h-4 w-4" />
+                </button>
               </div>
             </div>
           )}
 
           {/* Step 3: Payment */}
           {step === 3 && (
-            <div className="bg-white rounded-2xl shadow-card p-5 space-y-4">
-              <h2 className="font-semibold text-text-primary">Phương thức thanh toán</h2>
-              <div className="space-y-3">
-                {PAYMENT_METHODS.map(pm => (
-                  <label key={pm.value}
-                    className={cn(
-                      'flex items-center gap-3 p-4 border-2 rounded-xl cursor-pointer transition-colors',
-                      payment === pm.value ? 'border-primary bg-primary-50' : 'border-border hover:border-primary-light',
-                    )}>
-                    <input type="radio" name="payment" value={pm.value}
-                      checked={payment === pm.value}
-                      onChange={() => setPayment(pm.value)}
+            <div className="card p-5 animate-fade-in space-y-4">
+              <h2 className="font-bold flex items-center gap-2"><CreditCard className="h-5 w-5 text-primary" /> Phương thức thanh toán</h2>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {PAYMENT_METHODS.map(p => (
+                  <label key={p.value}
+                    className={cn('flex items-center gap-3 p-4 rounded-xl border-2 cursor-pointer transition-colors',
+                      payment === p.value ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/30')}>
+                    <input type="radio" name="payment" value={p.value}
+                      checked={payment === p.value} onChange={() => setPayment(p.value)}
                       className="accent-primary" />
-                    <span className="text-xl">{pm.logo}</span>
-                    <span className="text-sm font-medium">{pm.label}</span>
+                    <span className="text-xl">{p.emoji}</span>
+                    <div>
+                      <p className="font-semibold text-sm">{p.label}</p>
+                      <p className="text-xs text-text-muted">{p.sub}</p>
+                    </div>
                   </label>
                 ))}
               </div>
 
-              <label className="flex items-center gap-3 p-4 bg-surface rounded-xl cursor-pointer">
-                <input type="checkbox" checked={usePoints}
-                  onChange={e => setUsePoints(e.target.checked)}
-                  className="h-4 w-4 accent-primary rounded" />
-                <div>
-                  <p className="text-sm font-medium">Sử dụng điểm thưởng</p>
-                  <p className="text-xs text-text-secondary">500 điểm = 500.000đ</p>
+              {error && (
+                <div className="p-3 bg-red-50 border border-danger/20 rounded-xl text-sm text-danger">
+                  {error}
                 </div>
-              </label>
+              )}
 
-              <div className="flex justify-between">
-                <Button variant="ghost" onClick={() => setStep(2)}>← Quay lại</Button>
-                <Button variant="primary" size="lg"
-                  loading={loading} onClick={placeOrder}
-                  className="bg-accent hover:bg-red-700 px-8">
-                  ĐẶT HÀNG
-                </Button>
+              <div className="flex gap-3">
+                <button onClick={() => setStep(2)} className="btn-outline flex-1">← Quay lại</button>
+                <button onClick={handlePlaceOrder} disabled={loading}
+                  className="btn-accent flex-1 gap-2 text-base py-3.5">
+                  {loading ? <><Loader2 className="h-4 w-4 animate-spin" /> Đang xử lý...</> : `Đặt hàng · ${formatPrice(total)}`}
+                </button>
               </div>
             </div>
           )}
         </div>
 
-        {/* Order summary sidebar */}
-        <div className="bg-white rounded-2xl shadow-card p-5 space-y-4 sticky top-20">
-          <h3 className="font-semibold">Đơn hàng ({cart?.itemCount ?? 0})</h3>
-          <div className="space-y-3 max-h-48 overflow-y-auto">
-            {cart?.items.map(item => (
-              <div key={item.id} className="flex gap-2 text-sm">
-                <div className="relative h-12 w-12 flex-shrink-0 rounded-lg overflow-hidden bg-surface">
-                  {/* Image would go here */}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="line-clamp-1 text-xs font-medium">{item.product.name}</p>
-                  {item.variant && <p className="text-xs text-text-secondary">{item.variant.name}</p>}
-                  <p className="text-xs">x{item.quantity}</p>
-                </div>
-                <span className="text-xs font-semibold flex-shrink-0">{formatPrice(item.totalPrice)}</span>
+        {/* Order summary */}
+        <div className="card p-5 h-fit sticky top-24 space-y-4">
+          <h2 className="font-bold">Đơn hàng ({items.length})</h2>
+          <div className="space-y-3 max-h-60 overflow-y-auto pr-1">
+            {items.map(item => (
+              <div key={item.id} className="flex items-center gap-3">
+                <span className="text-xs font-bold text-text-muted shrink-0 w-5 text-center">{item.quantity}×</span>
+                <p className="text-sm flex-1 line-clamp-2">{item.product?.name}</p>
+                <p className="text-sm font-semibold shrink-0">{formatPrice(item.total_price)}</p>
               </div>
             ))}
           </div>
-          <div className="space-y-1.5 text-sm border-t border-border pt-3">
+          <div className="border-t border-border pt-3 space-y-2 text-sm">
             <div className="flex justify-between text-text-secondary">
               <span>Tạm tính</span><span>{formatPrice(subtotal)}</span>
             </div>
             <div className="flex justify-between text-text-secondary">
               <span>Vận chuyển</span>
-              <span className={shippingFee === 0 ? 'text-success' : ''}>
-                {shippingFee === 0 ? 'Miễn phí' : formatPrice(shippingFee)}
-              </span>
+              <span className={shipping === 0 ? 'text-success' : ''}>{shipping === 0 ? 'Miễn phí' : formatPrice(shipping)}</span>
             </div>
             <div className="flex justify-between font-bold text-base pt-1 border-t border-border">
-              <span>Tổng cộng</span>
-              <span className="text-primary">{formatPrice(total)}</span>
+              <span>Tổng</span>
+              <span className="text-danger font-display font-black text-xl">{formatPrice(total)}</span>
             </div>
           </div>
         </div>

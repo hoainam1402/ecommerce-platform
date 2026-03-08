@@ -5,45 +5,27 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
-// ── Formatters ────────────────────────────────────────────────
-export function formatPrice(value: number): string {
-  return new Intl.NumberFormat('vi-VN', {
-    style: 'currency',
-    currency: 'VND',
-    maximumFractionDigits: 0,
-  }).format(value)
+export function formatPrice(amount: number | string | null | undefined): string {
+  if (amount == null) return '—'
+  const num = typeof amount === 'string' ? parseFloat(amount) : amount
+  if (isNaN(num)) return '—'
+  return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(num)
 }
 
-export function formatNumber(value: number): string {
-  return new Intl.NumberFormat('vi-VN').format(value)
+export function formatDate(date: string | Date | null | undefined, opts?: Intl.DateTimeFormatOptions): string {
+  if (!date) return '—'
+  return new Intl.DateTimeFormat('vi-VN', opts ?? { day: '2-digit', month: '2-digit', year: 'numeric' })
+    .format(new Date(date))
 }
 
-export function formatDate(date: string | Date): string {
-  return new Intl.DateTimeFormat('vi-VN', {
-    day: '2-digit', month: '2-digit', year: 'numeric',
-  }).format(new Date(date))
+export function slugify(str: string): string {
+  return str.toLowerCase().replace(/\s+/g, '-').replace(/[^\w-]/g, '')
 }
 
-export function formatDateTime(date: string | Date): string {
-  return new Intl.DateTimeFormat('vi-VN', {
-    day: '2-digit', month: '2-digit', year: 'numeric',
-    hour: '2-digit', minute: '2-digit',
-  }).format(new Date(date))
+export function discountPercent(base: number, sale: number): number {
+  return Math.round((1 - sale / base) * 100)
 }
 
-export function calcDiscountPct(base: number, sale: number): number {
-  return Math.round(((base - sale) / base) * 100)
-}
-
-export function slugify(text: string): string {
-  return text
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-z0-9\s-]/g, '')
-    .replace(/\s+/g, '-')
-}
-
-export function truncate(text: string, maxLen: number): string {
-  return text.length > maxLen ? text.slice(0, maxLen) + '...' : text
+export function truncate(str: string, len = 60): string {
+  return str.length > len ? str.slice(0, len) + '…' : str
 }

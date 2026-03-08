@@ -1,282 +1,209 @@
 'use client'
 import { useState } from 'react'
 import Image from 'next/image'
+import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import { useQuery } from '@tanstack/react-query'
-import {
-  Star, Heart, ShoppingCart, Zap, Truck, RefreshCw, Shield,
-  ChevronLeft, ChevronRight, ZoomIn, Minus, Plus, Share2,
-} from 'lucide-react'
+import { Star, ShoppingCart, Zap, Shield, RotateCcw, Truck, ChevronRight, Minus, Plus, Heart } from 'lucide-react'
 import { productApi } from '@/lib/api'
 import { useCartStore } from '@/stores/cart.store'
-import { Button } from '@/components/ui/Button'
-import { ProductCard } from '@/components/ui/ProductCard'
-import { Skeleton } from '@/components/ui/Skeleton'
-import { cn, formatPrice, calcDiscountPct } from '@/lib/utils'
+import { cn, formatPrice, discountPercent } from '@/lib/utils'
 
-function RatingStars({ rating, size = 'md' }: { rating: number; size?: 'sm' | 'md' }) {
-  return (
-    <div className="flex items-center gap-0.5">
-      {[1,2,3,4,5].map(i => (
-        <Star key={i} className={cn(
-          size === 'sm' ? 'h-3 w-3' : 'h-4 w-4',
-          i <= Math.round(rating) ? 'fill-warning text-warning' : 'fill-border text-border',
-        )} />
-      ))}
-    </div>
-  )
-}
-
-export default function PDPPage() {
+export default function ProductDetailPage() {
   const { slug } = useParams<{ slug: string }>()
-  const { addItem } = useCartStore()
 
-  const [selectedVariant, setSelectedVariant] = useState<string | null>(null)
-  const [quantity, setQuantity]               = useState(1)
-  const [activeImage, setActiveImage]         = useState(0)
-  const [activeTab, setActiveTab]             = useState<'desc' | 'specs' | 'reviews' | 'qa'>('desc')
-  const [wishlisted, setWishlisted]           = useState(false)
-  const [addingToCart, setAddingToCart]       = useState(false)
-
-  const { data: product, isLoading } = useQuery({
+  const { data, isLoading } = useQuery({
     queryKey: ['product', slug],
     queryFn:  () => productApi.detail(slug),
-    enabled:  !!slug,
   })
+  const product = data?.data
 
-  const { data: reviewsData } = useQuery({
-    queryKey: ['reviews', slug],
-    queryFn:  () => productApi.reviews(slug),
-    enabled:  !!slug && activeTab === 'reviews',
-  })
+  const [mainImg,   setMainImg]   = useState(0)
+  const [variantId, setVariantId] = useState<string | null>(null)
+  const [qty,       setQty]       = useState(1)
+  const [wished,    setWished]    = useState(false)
+  const [activeTab, setActiveTab] = useState<'desc'|'specs'|'reviews'>('desc')
 
-  if (isLoading) {
-    return (
-      <div className="container-page py-6">
-        <div className="grid md:grid-cols-2 gap-8">
-          <div className="space-y-3">
-            <Skeleton className="aspect-square rounded-2xl" />
-            <div className="flex gap-2">{Array.from({length:4}).map((_,i) => <Skeleton key={i} className="h-16 w-16 rounded-lg" />)}</div>
-          </div>
-          <div className="space-y-4">
-            <Skeleton className="h-8 w-3/4" />
-            <Skeleton className="h-6 w-1/2" />
-            <Skeleton className="h-10 w-1/3" />
-            <Skeleton className="h-12 w-full" />
-          </div>
+  const { addItem, loading: cartLoading } = useCartStore()
+
+  const selectedVariant = product?.variants?.find((v: any) => v.id === variantId)
+    ?? product?.variants?.[0]
+
+  const price     = selectedVariant?.sale_price ?? selectedVariant?.price ?? product?.sale_price ?? product?.base_price
+  const origPrice = selectedVariant?.price ?? product?.base_price
+  const hasDiscount = price && origPrice && price < origPrice
+  const discount    = hasDiscount ? discountPercent(parseFloat(origPrice), parseFloat(price)) : 0
+
+  const images = product?.images ?? []
+
+  const handleAddToCart = async () => {
+    await addItem(product.id, qty, selectedVariant?.id)
+  }
+
+  if (isLoading) return (
+    <div className="container-page py-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+        <div className="aspect-square skeleton rounded-2xl" />
+        <div className="space-y-4">
+          <div className="h-6 skeleton w-1/3" />
+          <div className="h-8 skeleton w-full" />
+          <div className="h-4 skeleton w-1/2" />
+          <div className="h-10 skeleton w-1/3" />
         </div>
       </div>
-    )
-  }
+    </div>
+  )
 
-  if (!product) return null
-  const p = product as any
-
-  const images   = p.images ?? []
-  const variants = p.variants ?? []
-  const currentVariant = variants.find((v: any) => v.id === selectedVariant)
-  const price    = currentVariant?.salePrice ?? currentVariant?.price ?? p.salePrice ?? p.basePrice
-  const baseP    = currentVariant?.price ?? p.basePrice
-  const discPct  = price < baseP ? calcDiscountPct(baseP, price) : null
-  const inStock  = p.status !== 'out_of_stock' && (currentVariant?.stockQuantity ?? 1) > 0
-
-  const handleAddToCart = async (buyNow = false) => {
-    if (!inStock) return
-    setAddingToCart(true)
-    try {
-      await addItem(p.id, selectedVariant ?? undefined, quantity)
-      if (buyNow) window.location.href = '/checkout'
-    } finally {
-      setAddingToCart(false)
-    }
-  }
-
-  const TABS = [
-    { key: 'desc',    label: 'Mô tả' },
-    { key: 'specs',   label: 'Thông số' },
-    { key: 'reviews', label: `Đánh giá (${p.reviewCount ?? 0})` },
-    { key: 'qa',      label: 'Hỏi & Đáp' },
-  ] as const
+  if (!product) return (
+    <div className="container-page py-24 text-center">
+      <p className="text-5xl mb-4">😕</p>
+      <p className="font-bold text-xl">Không tìm thấy sản phẩm</p>
+      <Link href="/products" className="btn-primary mt-6 inline-flex">Quay lại</Link>
+    </div>
+  )
 
   return (
     <div className="container-page py-6">
       {/* Breadcrumb */}
-      <nav className="text-xs text-text-secondary mb-4 flex items-center gap-1.5 flex-wrap">
-        <a href="/" className="hover:text-primary">Trang chủ</a>
-        {p.categories?.[0] && (<><span>/</span><a href={`/categories/${p.categories[0].slug}`} className="hover:text-primary">{p.categories[0].name}</a></>)}
-        <span>/</span>
-        <span className="text-text-primary font-medium line-clamp-1">{p.name}</span>
+      <nav className="flex items-center gap-1.5 text-sm text-text-muted mb-6">
+        <Link href="/" className="hover:text-primary transition-colors">Trang chủ</Link>
+        <ChevronRight className="h-3.5 w-3.5" />
+        <Link href="/products" className="hover:text-primary transition-colors">Sản phẩm</Link>
+        <ChevronRight className="h-3.5 w-3.5" />
+        <span className="text-text-primary font-medium truncate max-w-[200px]">{product.name}</span>
       </nav>
 
-      <div className="grid md:grid-cols-2 gap-8 lg:gap-12">
-        {/* LEFT — Gallery */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 xl:gap-14">
+        {/* Gallery */}
         <div className="space-y-3">
-          {/* Main image */}
-          <div className="relative aspect-square rounded-2xl overflow-hidden bg-surface group cursor-zoom-in">
+          <div className="relative aspect-square rounded-2xl overflow-hidden bg-surface border border-border">
             <Image
-              src={images[activeImage]?.url ?? '/placeholder-product.jpg'}
-              alt={p.name} fill className="object-contain p-4"
+              src={images[mainImg]?.url ?? 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=800'}
+              alt={product.name} fill className="object-cover" priority sizes="(max-width: 1024px) 100vw, 50vw"
             />
-            {discPct && (
-              <span className="absolute top-4 left-4 badge-sale text-base px-3 py-1">-{discPct}%</span>
-            )}
-            <button className="absolute top-4 right-4 h-9 w-9 rounded-full bg-white shadow flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-              <ZoomIn className="h-4 w-4 text-text-secondary" />
-            </button>
-            {images.length > 1 && (
-              <>
-                <button onClick={() => setActiveImage(i => (i - 1 + images.length) % images.length)}
-                  className="absolute left-2 top-1/2 -translate-y-1/2 h-8 w-8 rounded-full bg-white/80 shadow flex items-center justify-center">
-                  <ChevronLeft className="h-4 w-4" />
-                </button>
-                <button onClick={() => setActiveImage(i => (i + 1) % images.length)}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 h-8 w-8 rounded-full bg-white/80 shadow flex items-center justify-center">
-                  <ChevronRight className="h-4 w-4" />
-                </button>
-              </>
+            {discount > 0 && (
+              <span className="absolute top-4 left-4 badge-sale text-sm px-3 py-1">-{discount}%</span>
             )}
           </div>
-          {/* Thumbnails */}
           {images.length > 1 && (
-            <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-1">
+            <div className="flex gap-2 overflow-x-auto scrollbar-hide">
               {images.map((img: any, i: number) => (
-                <button key={i} onClick={() => setActiveImage(i)}
-                  className={cn('h-16 w-16 flex-shrink-0 rounded-lg overflow-hidden border-2 transition-colors',
-                    i === activeImage ? 'border-primary' : 'border-border hover:border-primary-light')}>
-                  <Image src={img.url} alt="" width={64} height={64} className="object-cover w-full h-full" />
+                <button key={i} onClick={() => setMainImg(i)}
+                  className={cn('relative shrink-0 h-16 w-16 rounded-xl overflow-hidden border-2 transition-colors',
+                    i === mainImg ? 'border-primary' : 'border-transparent hover:border-border')}>
+                  <Image src={img.url} alt="" fill className="object-cover" sizes="64px" />
                 </button>
               ))}
             </div>
           )}
         </div>
 
-        {/* RIGHT — Info */}
-        <div className="space-y-4">
-          {p.brand && <p className="text-sm text-primary font-medium">{p.brand.name}</p>}
-          <h1 className="font-display font-bold text-2xl text-text-primary leading-snug">{p.name}</h1>
+        {/* Info */}
+        <div className="space-y-5">
+          {product.brand && (
+            <p className="text-xs font-bold text-text-muted uppercase tracking-widest">{product.brand.name}</p>
+          )}
+
+          <h1 className="font-display font-bold text-2xl md:text-3xl text-text-primary leading-tight">
+            {product.name}
+          </h1>
 
           {/* Rating */}
-          <div className="flex items-center gap-3 text-sm">
-            <RatingStars rating={p.avgRating ?? 0} />
-            <span className="font-medium">{(p.avgRating ?? 0).toFixed(1)}</span>
-            <span className="text-text-secondary">({p.reviewCount ?? 0} đánh giá)</span>
-            {p.soldCount > 0 && <span className="text-text-secondary">• Đã bán {p.soldCount}</span>}
-          </div>
-
-          {/* Price */}
-          <div className="flex items-baseline gap-3">
-            <span className="text-3xl font-black text-primary">{formatPrice(price)}</span>
-            {discPct && (
-              <>
-                <span className="text-lg line-through text-text-secondary">{formatPrice(baseP)}</span>
-                <span className="badge-sale">-{discPct}%</span>
-              </>
+          <div className="flex items-center gap-3 flex-wrap">
+            <div className="flex items-center gap-1">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <Star key={i} className={cn('h-4 w-4', i < Math.round(product.avg_rating ?? 0) ? 'fill-warning text-warning' : 'text-border')} />
+              ))}
+              <span className="font-bold text-sm ml-1">{product.avg_rating?.toFixed(1)}</span>
+            </div>
+            <span className="text-text-muted text-sm">({product.review_count} đánh giá)</span>
+            {product.sold_count > 0 && (
+              <span className="text-text-muted text-sm">• Đã bán {product.sold_count?.toLocaleString('vi-VN')}</span>
             )}
           </div>
 
+          {/* Price */}
+          <div className="flex items-end gap-3 py-3 border-y border-border">
+            <span className="font-display font-black text-4xl text-danger">{formatPrice(price)}</span>
+            {hasDiscount && <span className="text-text-muted line-through text-lg">{formatPrice(origPrice)}</span>}
+          </div>
+
           {/* Variants */}
-          {variants.length > 0 && (
+          {product.variants?.length > 0 && (
             <div className="space-y-3">
-              {/* Group by attribute type */}
-              {(() => {
-                const attrKeys = [...new Set(variants.flatMap((v: any) => Object.keys(v.attributes ?? {})))]
-                return attrKeys.map((attr: string) => {
-                  const options = [...new Set(variants.map((v: any) => v.attributes?.[attr]))]
-                  return (
-                    <div key={attr}>
-                      <p className="text-sm font-medium mb-2 capitalize">{attr}:</p>
-                      <div className="flex flex-wrap gap-2">
-                        {options.map((opt: any) => {
-                          const variantForOpt = variants.find((v: any) => v.attributes?.[attr] === opt)
-                          const outOfStock = variantForOpt?.stockQuantity === 0
-                          const isSelected = currentVariant?.attributes?.[attr] === opt
-                          return (
-                            <button key={opt}
-                              onClick={() => !outOfStock && setSelectedVariant(variantForOpt?.id)}
-                              disabled={outOfStock}
-                              className={cn(
-                                'px-3 py-1.5 rounded-lg border-2 text-sm font-medium transition-all',
-                                isSelected
-                                  ? 'border-primary bg-primary-50 text-primary'
-                                  : 'border-border hover:border-primary-light text-text-primary',
-                                outOfStock && 'opacity-40 cursor-not-allowed line-through',
-                              )}>
-                              {opt}
-                            </button>
-                          )
-                        })}
-                      </div>
-                    </div>
-                  )
-                })
-              })()}
+              <p className="text-sm font-semibold text-text-primary">
+                Phiên bản: <span className="font-normal text-text-secondary">{selectedVariant?.name}</span>
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {product.variants.map((v: any) => (
+                  <button key={v.id} onClick={() => setVariantId(v.id)}
+                    disabled={v.stock_quantity === 0}
+                    className={cn(
+                      'px-3.5 py-2 rounded-xl text-sm font-medium border-2 transition-all',
+                      v.id === (variantId ?? product.variants[0]?.id)
+                        ? 'border-primary bg-primary/5 text-primary'
+                        : 'border-border hover:border-primary/50 text-text-secondary',
+                      v.stock_quantity === 0 && 'opacity-40 line-through cursor-not-allowed'
+                    )}>
+                    {v.name}
+                  </button>
+                ))}
+              </div>
+              {selectedVariant && (
+                <p className="text-xs text-text-muted">
+                  Còn lại: <span className={cn('font-semibold', selectedVariant.stock_quantity > 0 ? 'text-success' : 'text-danger')}>
+                    {selectedVariant.stock_quantity > 0 ? `${selectedVariant.stock_quantity} sản phẩm` : 'Hết hàng'}
+                  </span>
+                </p>
+              )}
             </div>
           )}
 
           {/* Quantity */}
           <div className="flex items-center gap-4">
-            <p className="text-sm font-medium">Số lượng:</p>
             <div className="flex items-center border-2 border-border rounded-xl overflow-hidden">
-              <button onClick={() => setQuantity(q => Math.max(1, q - 1))}
-                disabled={quantity <= 1}
-                className="h-10 w-10 flex items-center justify-center hover:bg-surface disabled:opacity-40 transition-colors">
+              <button onClick={() => setQty(q => Math.max(1, q - 1))}
+                className="px-4 py-3 hover:bg-surface transition-colors">
                 <Minus className="h-4 w-4" />
               </button>
-              <span className="h-10 w-12 flex items-center justify-center text-sm font-bold border-x-2 border-border">
-                {quantity}
-              </span>
-              <button onClick={() => setQuantity(q => q + 1)}
-                className="h-10 w-10 flex items-center justify-center hover:bg-surface transition-colors">
+              <span className="px-5 py-3 font-bold text-base min-w-[3.5rem] text-center border-x-2 border-border">{qty}</span>
+              <button onClick={() => setQty(q => q + 1)}
+                className="px-4 py-3 hover:bg-surface transition-colors">
                 <Plus className="h-4 w-4" />
               </button>
             </div>
-            {currentVariant && (
-              <span className="text-sm text-text-secondary">
-                Còn {currentVariant.stockQuantity} sản phẩm
-              </span>
-            )}
+            <p className="text-sm text-text-muted">Tối đa 10 sản phẩm</p>
           </div>
 
-          {/* CTA buttons */}
-          <div className="grid grid-cols-2 gap-3">
-            <Button variant="outline" size="lg"
-              onClick={() => handleAddToCart(false)}
-              loading={addingToCart}
-              disabled={!inStock}
-              leftIcon={<ShoppingCart className="h-5 w-5" />}>
-              {inStock ? 'Thêm vào giỏ' : 'Hết hàng'}
-            </Button>
-            <Button variant="primary" size="lg"
-              onClick={() => handleAddToCart(true)}
-              disabled={!inStock}
-              leftIcon={<Zap className="h-5 w-5 fill-white" />}>
+          {/* CTA */}
+          <div className="flex gap-3">
+            <button onClick={handleAddToCart} disabled={cartLoading}
+              className="btn-outline flex-1 gap-2 py-3.5">
+              <ShoppingCart className="h-4 w-4" />
+              {cartLoading ? 'Đang thêm...' : 'Thêm vào giỏ'}
+            </button>
+            <button onClick={handleAddToCart} disabled={cartLoading}
+              className="btn-accent flex-1 gap-2 py-3.5">
+              <Zap className="h-4 w-4 fill-white" />
               Mua ngay
-            </Button>
-          </div>
-
-          {/* Wishlist + Share */}
-          <div className="flex items-center gap-3 text-sm">
-            <button onClick={() => setWishlisted(w => !w)}
-              className="flex items-center gap-2 text-text-secondary hover:text-accent transition-colors">
-              <Heart className={cn('h-4 w-4', wishlisted && 'fill-accent text-accent')} />
-              {wishlisted ? 'Đã thêm vào yêu thích' : 'Thêm vào yêu thích'}
             </button>
-            <span className="text-border">|</span>
-            <button className="flex items-center gap-2 text-text-secondary hover:text-primary transition-colors">
-              <Share2 className="h-4 w-4" /> Chia sẻ
+            <button onClick={() => setWished(w => !w)}
+              className={cn('btn-outline px-4 py-3.5', wished && 'border-danger text-danger bg-red-50')}>
+              <Heart className={cn('h-4 w-4', wished && 'fill-danger')} />
             </button>
           </div>
 
-          {/* Policies */}
-          <div className="bg-surface rounded-xl p-4 space-y-2.5">
+          {/* Perks */}
+          <div className="grid grid-cols-3 gap-3 pt-2">
             {[
-              { icon: Truck,    text: 'Miễn phí vận chuyển đơn từ 300.000đ' },
-              { icon: RefreshCw, text: 'Đổi trả trong 30 ngày nếu lỗi nhà sản xuất' },
-              { icon: Shield,   text: 'Bảo hành chính hãng 12 tháng' },
-            ].map(({ icon: Icon, text }) => (
-              <div key={text} className="flex items-center gap-3 text-sm text-text-secondary">
-                <Icon className="h-4 w-4 text-success flex-shrink-0" />
-                {text}
+              { icon: Truck,      label: 'Miễn phí ship', sub: 'Đơn từ 299K' },
+              { icon: RotateCcw,  label: 'Đổi trả 30 ngày', sub: 'Dễ dàng' },
+              { icon: Shield,     label: 'Bảo hành', sub: 'Chính hãng' },
+            ].map(({ icon: Icon, label, sub }) => (
+              <div key={label} className="flex flex-col items-center text-center p-3 rounded-xl bg-surface">
+                <Icon className="h-5 w-5 text-primary mb-1.5" />
+                <p className="text-xs font-semibold text-text-primary">{label}</p>
+                <p className="text-xs text-text-muted">{sub}</p>
               </div>
             ))}
           </div>
@@ -284,69 +211,58 @@ export default function PDPPage() {
       </div>
 
       {/* Tabs */}
-      <div className="mt-12 border-b border-border">
-        <div className="flex gap-1 overflow-x-auto scrollbar-hide">
-          {TABS.map(tab => (
-            <button key={tab.key}
-              onClick={() => setActiveTab(tab.key)}
-              className={cn(
-                'flex-shrink-0 px-5 py-3 text-sm font-medium border-b-2 -mb-px transition-colors',
+      <div className="mt-12">
+        <div className="flex border-b border-border gap-1">
+          {[
+            { key: 'desc',    label: 'Mô tả sản phẩm' },
+            { key: 'specs',   label: 'Thông số kỹ thuật' },
+            { key: 'reviews', label: `Đánh giá (${product.review_count ?? 0})` },
+          ].map(tab => (
+            <button key={tab.key} onClick={() => setActiveTab(tab.key as any)}
+              className={cn('px-5 py-3 text-sm font-medium border-b-2 transition-colors',
                 activeTab === tab.key
                   ? 'border-primary text-primary'
-                  : 'border-transparent text-text-secondary hover:text-text-primary',
-              )}>
+                  : 'border-transparent text-text-secondary hover:text-primary')}>
               {tab.label}
             </button>
           ))}
         </div>
-      </div>
 
-      <div className="py-8 max-w-3xl">
-        {activeTab === 'desc' && (
-          <div className="prose prose-sm max-w-none text-text-primary"
-            dangerouslySetInnerHTML={{ __html: p.description ?? '<p>Chưa có mô tả.</p>' }} />
-        )}
-
-        {activeTab === 'specs' && (
-          <div className="space-y-1">
-            {Object.entries(p.attributes ?? {}).map(([k, v]) => (
-              <div key={k} className="grid grid-cols-2 gap-4 py-2.5 border-b border-border text-sm">
-                <span className="text-text-secondary capitalize">{k}</span>
-                <span className="font-medium text-text-primary">{String(v)}</span>
-              </div>
-            ))}
-            {!p.attributes && <p className="text-text-secondary text-sm">Chưa có thông số.</p>}
-          </div>
-        )}
-
-        {activeTab === 'reviews' && (
-          <div className="space-y-4">
-            <div className="flex items-center gap-6 p-6 bg-surface rounded-xl">
-              <div className="text-center">
-                <p className="text-5xl font-black text-primary">{(p.avgRating ?? 0).toFixed(1)}</p>
-                <RatingStars rating={p.avgRating ?? 0} />
-                <p className="text-xs text-text-secondary mt-1">{p.reviewCount ?? 0} đánh giá</p>
-              </div>
+        <div className="py-6">
+          {activeTab === 'desc' && (
+            <div className="prose prose-sm max-w-none text-text-secondary leading-relaxed"
+              dangerouslySetInnerHTML={{ __html: product.description || product.short_description || 'Chưa có mô tả.' }} />
+          )}
+          {activeTab === 'specs' && (
+            <div className="max-w-lg">
+              {product.attributes && typeof product.attributes === 'object'
+                ? Object.entries(product.attributes).map(([k, v]) => (
+                    <div key={k} className="flex py-2.5 border-b border-border last:border-0">
+                      <span className="w-1/2 text-sm text-text-muted">{k}</span>
+                      <span className="w-1/2 text-sm font-medium">{String(v)}</span>
+                    </div>
+                  ))
+                : <p className="text-text-muted text-sm">Chưa có thông số.</p>
+              }
             </div>
-            {(reviewsData as any)?.items?.map((r: any) => (
-              <div key={r.id} className="border border-border rounded-xl p-4 space-y-2">
-                <div className="flex items-center gap-2">
-                  <RatingStars rating={r.rating} size="sm" />
-                  <span className="text-sm font-medium">{r.user?.fullName ?? 'Ẩn danh'}</span>
-                  {r.isVerifiedPurchase && (
-                    <span className="text-xs text-success bg-green-50 px-2 py-0.5 rounded-full">✓ Đã mua hàng</span>
-                  )}
+          )}
+          {activeTab === 'reviews' && (
+            <div className="max-w-2xl">
+              <div className="flex items-center gap-6 p-5 bg-surface rounded-2xl mb-6">
+                <div className="text-center">
+                  <p className="font-display font-black text-5xl text-primary">{product.avg_rating?.toFixed(1)}</p>
+                  <div className="flex justify-center mt-1">
+                    {Array.from({ length: 5 }).map((_, i) => (
+                      <Star key={i} className={cn('h-4 w-4', i < Math.round(product.avg_rating ?? 0) ? 'fill-warning text-warning' : 'text-border')} />
+                    ))}
+                  </div>
+                  <p className="text-xs text-text-muted mt-1">{product.review_count} đánh giá</p>
                 </div>
-                {r.title && <p className="font-medium text-sm">{r.title}</p>}
-                <p className="text-sm text-text-secondary">{r.content}</p>
               </div>
-            ))}
-          </div>
-        )}
-
-        {activeTab === 'qa' && (
-          <p className="text-text-secondary text-sm">Chưa có câu hỏi nào. Hãy là người đặt câu hỏi đầu tiên!</p>
-        )}
+              <p className="text-text-muted text-sm">Đăng nhập để xem và viết đánh giá.</p>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )

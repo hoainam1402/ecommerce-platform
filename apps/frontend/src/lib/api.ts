@@ -1,96 +1,112 @@
+'use client'
 import axios from 'axios'
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000/api/v1'
+const BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000/api/v1'
 
-export const api = axios.create({
-  baseURL: API_URL,
-  timeout: 15000,
-  headers: { 'Content-Type': 'application/json' },
-})
+export const api = axios.create({ baseURL: BASE, withCredentials: false })
 
-// ── Request interceptor — attach token ────────────────────────
-api.interceptors.request.use((config) => {
+// ── Token inject ──────────────────────────────────────────
+api.interceptors.request.use(cfg => {
   if (typeof window !== 'undefined') {
-    const token = localStorage.getItem('access_token')
-    if (token) config.headers.Authorization = `Bearer ${token}`
+    const raw = localStorage.getItem('auth-storage')
+    if (raw) {
+      try {
+        const { state } = JSON.parse(raw)
+        if (state?.accessToken) cfg.headers.Authorization = `Bearer ${state.accessToken}`
+      } catch {}
+    }
   }
-  return config
+  return cfg
 })
 
-// ── Response interceptor — unwrap data + refresh token ────────
+// ── Auto refresh on 401 ───────────────────────────────────
 api.interceptors.response.use(
-  (res) => res.data?.data ?? res.data,
-  async (err) => {
-    const original = err.config
-
-    if (err.response?.status === 401 && !original._retry) {
-      original._retry = true
+  r => r,
+  async err => {
+    const orig = err.config
+    if (err.response?.status === 401 && !orig._retry) {
+      orig._retry = true
       try {
-        const refresh = localStorage.getItem('refresh_token')
-        if (!refresh) throw new Error('No refresh token')
-
-        const res = await axios.post(`${API_URL}/auth/refresh`, { refresh_token: refresh })
-        const { accessToken } = res.data.data
-        localStorage.setItem('access_token', accessToken)
-        original.headers.Authorization = `Bearer ${accessToken}`
-        return api(original)
-      } catch {
-        localStorage.removeItem('access_token')
-        localStorage.removeItem('refresh_token')
-        window.location.href = '/login'
-      }
+        const raw = localStorage.getItem('auth-storage')
+        const { state } = JSON.parse(raw || '{}')
+        if (state?.refreshToken) {
+          const { data } = await axios.post(`${BASE}/auth/refresh`, { refresh_token: state.refreshToken })
+          const newToken = data.data.accessToken
+          const parsed = JSON.parse(raw!)
+          parsed.state.accessToken = newToken
+          localStorage.setItem('auth-storage', JSON.stringify(parsed))
+          orig.headers.Authorization = `Bearer ${newToken}`
+          return api(orig)
+        }
+      } catch {}
     }
-    return Promise.reject(err.response?.data ?? err)
-  },
+    return Promise.reject(err)
+  }
 )
 
-// ── Typed API helpers ─────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────
+const get  = <T>(url: string, params?: object) => api.get<{success:boolean;data:T;meta?:any}>(url, { params }).then(r => r.data)
+const post = <T>(url: string, body?: object)   => api.post<{success:boolean;data:T}>(url, body).then(r => r.data)
+const patch = <T>(url: string, body?: object)  => api.patch<{success:boolean;data:T}>(url, body).then(r => r.data)
+const del   = (url: string)                     => api.delete(url).then(r => r.data)
+
+// ── Auth ──────────────────────────────────────────────────
 export const authApi = {
-  login:    (data: any)  => api.post('/auth/login', data),
-  register: (data: any)  => api.post('/auth/register', data),
-  logout:   ()           => api.post('/auth/logout'),
-  refresh:  (token: string) => api.post('/auth/refresh', { refresh_token: token }),
-  me:       ()           => api.get('/users/me'),
+  login:    (email: string, password: string) => post<any>('/auth/login', { email, password }),
+  register: (body: any)  => post<any>('/auth/register', body),
+  refresh:  (token: string) => post<any>('/auth/refresh', { refresh_token: token }),
+  logout:   ()           => post('/auth/logout'),
+  me:       ()           => get<any>('/users/me'),
 }
 
+// ── Products ──────────────────────────────────────────────
 export const productApi = {
-  list:       (params?: any) => api.get('/products', { params }),
-  detail:     (id: string)   => api.get(`/products/${id}`),
-  reviews:    (id: string, params?: any) => api.get(`/products/${id}/reviews`, { params }),
-  addReview:  (id: string, data: any)   => api.post(`/products/${id}/reviews`, data),
-  categories: (params?: any) => api.get('/categories', { params }),
+  list: (params?: {
+    page?: number; limit?: number; q?: string
+    category_id?: string; brand_id?: string
+    min_price?: number; max_price?: number
+    min_rating?: number; sort?: string
+  }) => get<any[]>('/products', params),
+
+  detail: (slug: string) => get<any>(`/products/${slug}`),
+  reviews: (id: string, params?: any) => get<any[]>(`/products/${id}/reviews`, params),
+  categories: () => get<any[]>('/categories'),
 }
 
-export const searchApi = {
-  search:      (params: any) => api.get('/search/products', { params }),
-  autocomplete: (q: string)  => api.get('/search/autocomplete', { params: { q } }),
-}
-
+// ── Cart ──────────────────────────────────────────────────
 export const cartApi = {
-  get:      ()                        => api.get('/cart'),
-  add:      (data: any)              => api.post('/cart/items', data),
-  update:   (itemId: string, data: any) => api.patch(`/cart/items/${itemId}`, data),
-  remove:   (itemId: string)         => api.delete(`/cart/items/${itemId}`),
-  applyPromo: (code: string)         => api.post('/cart/apply-promotion', { code }),
-  shippingFee: (data: any)           => api.post('/cart/shipping-fee', data),
+  get:    ()           => get<any>('/cart'),
+  add:    (body: any)  => post<any>('/cart/items', body),
+  update: (id: string, quantity: number) => patch<any>(`/cart/items/${id}`, { quantity }),
+  remove: (id: string) => del(`/cart/items/${id}`),
+  applyPromo: (code: string) => post<any>('/cart/apply-promotion', { code }),
+  shippingFee: (body: any)   => post<any>('/cart/shipping-fee', body),
 }
 
+// ── Orders ────────────────────────────────────────────────
 export const orderApi = {
-  create:  (data: any)       => api.post('/orders', data),
-  list:    (params?: any)    => api.get('/orders', { params }),
-  detail:  (id: string)      => api.get(`/orders/${id}`),
-  cancel:  (id: string, reason: string) => api.post(`/orders/${id}/cancel`, { reason }),
+  list:   (params?: any) => get<any[]>('/orders', params),
+  detail: (id: string)   => get<any>(`/orders/${id}`),
+  create: (body: any)    => post<any>('/orders', body),
+  cancel: (id: string, reason: string) => post(`/orders/${id}/cancel`, { reason }),
 }
 
+// ── Payments ──────────────────────────────────────────────
+export const paymentApi = {
+  initiate: (orderId: string) => post<any>(`/payments/${orderId}/initiate`),
+}
+
+// ── Promotions ────────────────────────────────────────────
 export const promotionApi = {
-  validate: (data: any) => api.post('/promotions/validate', data),
-  flashSales: ()        => api.get('/promotions/flash-sales'),
+  validate:   (code: string, amount: number) => post<any>('/promotions/validate', { code, order_amount: amount }),
+  flashSales: () => get<any[]>('/promotions/flash-sales'),
 }
 
+// ── Users ─────────────────────────────────────────────────
 export const userApi = {
-  updateProfile: (data: any)          => api.patch('/users/me', data),
-  getAddresses:  ()                   => api.get('/users/me/addresses'),
-  addAddress:    (data: any)          => api.post('/users/me/addresses', data),
-  updateAddress: (id: string, data: any) => api.put(`/users/me/addresses/${id}`, data),
-  deleteAddress: (id: string)         => api.delete(`/users/me/addresses/${id}`),
+  updateProfile: (body: any) => patch<any>('/users/me', body),
+  addresses:     ()          => get<any[]>('/users/me/addresses'),
+  addAddress:    (body: any) => post<any>('/users/me/addresses', body),
+  updateAddress: (id: string, body: any) => patch<any>(`/users/me/addresses/${id}`, body),
+  deleteAddress: (id: string)            => del(`/users/me/addresses/${id}`),
 }

@@ -1,200 +1,153 @@
 'use client'
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
-import { Eye, EyeOff, Mail, Lock, User, Phone } from 'lucide-react'
+import { Eye, EyeOff, Loader2, Mail, Lock, User, Phone } from 'lucide-react'
 import { useAuthStore } from '@/stores/auth.store'
-import { Button } from '@/components/ui/Button'
+import { authApi } from '@/lib/api'
 import { cn } from '@/lib/utils'
 
 export default function LoginPage() {
-  const router = useRouter()
-  const { login, register, isLoading } = useAuthStore()
-  const [tab, setTab]           = useState<'login' | 'register'>('login')
-  const [showPass, setShowPass] = useState(false)
-  const [error, setError]       = useState('')
+  const router      = useRouter()
+  const searchParams = useSearchParams()
+  const redirect    = searchParams.get('redirect') || '/'
+  const { login }   = useAuthStore()
 
-  // Login form
-  const [loginData, setLoginData] = useState({ email: '', password: '' })
-  // Register form
-  const [regData, setRegData] = useState({
-    email: '', password: '', fullName: '', phone: '',
-  })
+  const [mode,     setMode]     = useState<'login'|'register'>('login')
+  const [showPwd,  setShowPwd]  = useState(false)
+  const [loading,  setLoading]  = useState(false)
+  const [error,    setError]    = useState('')
 
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setError('')
+  const [form, setForm] = useState({ email: '', password: '', full_name: '', phone: '' })
+  const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement>) => setForm(f => ({ ...f, [k]: e.target.value }))
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault(); setError(''); setLoading(true)
     try {
-      await login(loginData.email, loginData.password)
-      router.push('/')
+      if (mode === 'login') {
+        await login(form.email, form.password)
+      } else {
+        const res = await authApi.register({ email: form.email, password: form.password, full_name: form.full_name, phone: form.phone || undefined })
+        const { accessToken, refreshToken, user } = res.data
+        useAuthStore.setState({ accessToken, refreshToken, user })
+      }
+      router.push(redirect)
     } catch (err: any) {
-      setError(err?.error?.message ?? 'Email hoặc mật khẩu không đúng')
-    }
-  }
-
-  const handleRegister = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setError('')
-    try {
-      await register(regData)
-      router.push('/')
-    } catch (err: any) {
-      setError(err?.error?.message ?? 'Đăng ký thất bại')
-    }
+      setError(err.response?.data?.error?.message || (mode === 'login' ? 'Sai email hoặc mật khẩu' : 'Đăng ký thất bại'))
+    } finally { setLoading(false) }
   }
 
   return (
-    <div className="min-h-[calc(100vh-200px)] flex items-center justify-center py-12 px-4">
+    <div className="min-h-[calc(100vh-9rem)] flex items-center justify-center py-12 px-4">
       <div className="w-full max-w-md">
-        {/* Logo */}
-        <div className="text-center mb-8">
-          <Link href="/">
-            <span className="font-display font-black text-3xl text-primary tracking-tight">
-              ECOM<span className="text-accent">.</span>
-            </span>
-          </Link>
-          <p className="text-text-secondary text-sm mt-2">Chào mừng bạn trở lại</p>
-        </div>
 
-        <div className="bg-white rounded-2xl shadow-card overflow-hidden">
-          {/* Tabs */}
-          <div className="flex">
-            {(['login', 'register'] as const).map(t => (
-              <button key={t}
-                onClick={() => { setTab(t); setError('') }}
-                className={cn(
-                  'flex-1 py-4 text-sm font-semibold border-b-2 transition-colors',
-                  tab === t
-                    ? 'border-primary text-primary bg-primary-50/50'
-                    : 'border-border text-text-secondary hover:text-text-primary',
-                )}>
-                {t === 'login' ? 'Đăng nhập' : 'Đăng ký'}
+        {/* Card */}
+        <div className="card p-8 shadow-soft">
+          {/* Logo */}
+          <div className="text-center mb-7">
+            <Link href="/" className="inline-flex items-center gap-2 mb-5">
+              <div className="h-10 w-10 bg-primary rounded-xl flex items-center justify-center">
+                <span className="text-white font-display font-black text-lg">E</span>
+              </div>
+              <span className="font-display font-black text-2xl text-primary">ECOM</span>
+            </Link>
+            <h1 className="font-display font-bold text-2xl">
+              {mode === 'login' ? 'Chào mừng trở lại!' : 'Tạo tài khoản'}
+            </h1>
+            <p className="text-text-muted text-sm mt-1">
+              {mode === 'login' ? 'Đăng nhập để tiếp tục mua sắm' : 'Đăng ký để nhận ưu đãi độc quyền'}
+            </p>
+          </div>
+
+          {/* Toggle */}
+          <div className="flex bg-surface rounded-xl p-1 mb-6">
+            {(['login', 'register'] as const).map(m => (
+              <button key={m} onClick={() => { setMode(m); setError('') }}
+                className={cn('flex-1 py-2 rounded-lg text-sm font-semibold transition-all',
+                  mode === m ? 'bg-white shadow-card text-primary' : 'text-text-muted hover:text-primary')}>
+                {m === 'login' ? 'Đăng nhập' : 'Đăng ký'}
               </button>
             ))}
           </div>
 
-          <div className="p-6">
-            {error && (
-              <div className="mb-4 p-3 bg-red-50 text-accent text-sm rounded-xl border border-red-100">
-                {error}
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {mode === 'register' && (
+              <div className="relative">
+                <User className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-text-muted" />
+                <input value={form.full_name} onChange={set('full_name')} required
+                  placeholder="Họ và tên" className="input-base pl-10" />
               </div>
             )}
 
-            {tab === 'login' ? (
-              <form onSubmit={handleLogin} className="space-y-4">
-                <div>
-                  <label className="text-xs font-medium text-text-secondary mb-1.5 block">Email</label>
-                  <div className="relative">
-                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-text-secondary" />
-                    <input type="email" required placeholder="your@email.com"
-                      value={loginData.email}
-                      onChange={e => setLoginData(d => ({ ...d, email: e.target.value }))}
-                      className="input-base pl-9" />
-                  </div>
-                </div>
-                <div>
-                  <label className="text-xs font-medium text-text-secondary mb-1.5 block">Mật khẩu</label>
-                  <div className="relative">
-                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-text-secondary" />
-                    <input type={showPass ? 'text' : 'password'} required
-                      placeholder="••••••••"
-                      value={loginData.password}
-                      onChange={e => setLoginData(d => ({ ...d, password: e.target.value }))}
-                      className="input-base pl-9 pr-10" />
-                    <button type="button" onClick={() => setShowPass(s => !s)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-text-secondary hover:text-text-primary">
-                      {showPass ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                    </button>
-                  </div>
-                </div>
-                <div className="flex items-center justify-end">
-                  <Link href="/forgot-password" className="text-xs text-primary hover:underline">
-                    Quên mật khẩu?
-                  </Link>
-                </div>
-                <Button type="submit" variant="primary" size="lg"
-                  className="w-full" loading={isLoading}>
-                  Đăng nhập
-                </Button>
-                <div className="relative">
-                  <div className="absolute inset-0 flex items-center">
-                    <div className="w-full border-t border-border" />
-                  </div>
-                  <div className="relative flex justify-center text-xs">
-                    <span className="bg-white px-3 text-text-secondary">hoặc tiếp tục với</span>
-                  </div>
-                </div>
-                <Button type="button" variant="outline" size="lg" className="w-full">
-                  <svg className="h-4 w-4" viewBox="0 0 24 24">
-                    <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-                    <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-                    <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-                    <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
-                  </svg>
-                  Đăng nhập với Google
-                </Button>
-              </form>
-            ) : (
-              <form onSubmit={handleRegister} className="space-y-4">
-                <div>
-                  <label className="text-xs font-medium text-text-secondary mb-1.5 block">Họ và tên</label>
-                  <div className="relative">
-                    <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-text-secondary" />
-                    <input type="text" required placeholder="Nguyễn Văn A"
-                      value={regData.fullName}
-                      onChange={e => setRegData(d => ({ ...d, fullName: e.target.value }))}
-                      className="input-base pl-9" />
-                  </div>
-                </div>
-                <div>
-                  <label className="text-xs font-medium text-text-secondary mb-1.5 block">Email</label>
-                  <div className="relative">
-                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-text-secondary" />
-                    <input type="email" required placeholder="your@email.com"
-                      value={regData.email}
-                      onChange={e => setRegData(d => ({ ...d, email: e.target.value }))}
-                      className="input-base pl-9" />
-                  </div>
-                </div>
-                <div>
-                  <label className="text-xs font-medium text-text-secondary mb-1.5 block">Số điện thoại (tùy chọn)</label>
-                  <div className="relative">
-                    <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-text-secondary" />
-                    <input type="tel" placeholder="0901 234 567"
-                      value={regData.phone}
-                      onChange={e => setRegData(d => ({ ...d, phone: e.target.value }))}
-                      className="input-base pl-9" />
-                  </div>
-                </div>
-                <div>
-                  <label className="text-xs font-medium text-text-secondary mb-1.5 block">Mật khẩu</label>
-                  <div className="relative">
-                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-text-secondary" />
-                    <input type={showPass ? 'text' : 'password'} required minLength={8}
-                      placeholder="Tối thiểu 8 ký tự"
-                      value={regData.password}
-                      onChange={e => setRegData(d => ({ ...d, password: e.target.value }))}
-                      className="input-base pl-9 pr-10" />
-                    <button type="button" onClick={() => setShowPass(s => !s)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-text-secondary">
-                      {showPass ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                    </button>
-                  </div>
-                </div>
-                <Button type="submit" variant="primary" size="lg"
-                  className="w-full" loading={isLoading}>
-                  Tạo tài khoản
-                </Button>
-                <p className="text-xs text-center text-text-secondary">
-                  Bằng cách đăng ký, bạn đồng ý với{' '}
-                  <Link href="/terms" className="text-primary hover:underline">Điều khoản dịch vụ</Link>
-                  {' '}và{' '}
-                  <Link href="/privacy" className="text-primary hover:underline">Chính sách bảo mật</Link>
-                </p>
-              </form>
+            <div className="relative">
+              <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-text-muted" />
+              <input type="email" value={form.email} onChange={set('email')} required
+                placeholder="Email" className="input-base pl-10" />
+            </div>
+
+            {mode === 'register' && (
+              <div className="relative">
+                <Phone className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-text-muted" />
+                <input value={form.phone} onChange={set('phone')}
+                  placeholder="Số điện thoại (tùy chọn)" className="input-base pl-10" />
+              </div>
             )}
-          </div>
+
+            <div className="relative">
+              <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-text-muted" />
+              <input type={showPwd ? 'text' : 'password'} value={form.password} onChange={set('password')}
+                required minLength={8} placeholder="Mật khẩu (tối thiểu 8 ký tự)"
+                className="input-base pl-10 pr-10" />
+              <button type="button" onClick={() => setShowPwd(v => !v)}
+                className="absolute right-3.5 top-1/2 -translate-y-1/2 text-text-muted hover:text-primary transition-colors">
+                {showPwd ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
+
+            {mode === 'login' && (
+              <div className="flex justify-end">
+                <Link href="/forgot-password" className="text-sm text-primary hover:underline">Quên mật khẩu?</Link>
+              </div>
+            )}
+
+            {error && (
+              <div className="p-3 bg-red-50 border border-danger/20 rounded-xl text-sm text-danger">{error}</div>
+            )}
+
+            <button type="submit" disabled={loading} className="btn-primary w-full py-3 text-base mt-1">
+              {loading
+                ? <><Loader2 className="h-4 w-4 animate-spin" /> Đang xử lý...</>
+                : mode === 'login' ? 'Đăng nhập' : 'Tạo tài khoản'}
+            </button>
+
+            {/* Quick test */}
+            {mode === 'login' && (
+              <div className="border-t border-border pt-4 space-y-2">
+                <p className="text-xs text-text-muted text-center">Test nhanh:</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <button type="button"
+                    onClick={() => setForm(f => ({ ...f, email: 'admin@ecom.vn', password: 'Admin@123' }))}
+                    className="text-xs btn-ghost border border-border rounded-lg py-2">
+                    👑 Admin
+                  </button>
+                  <button type="button"
+                    onClick={() => setForm(f => ({ ...f, email: 'nguyen.van.a@gmail.com', password: 'Customer@123' }))}
+                    className="text-xs btn-ghost border border-border rounded-lg py-2">
+                    👤 Customer
+                  </button>
+                </div>
+              </div>
+            )}
+          </form>
         </div>
+
+        <p className="text-center text-sm text-text-muted mt-5">
+          {mode === 'login' ? 'Chưa có tài khoản? ' : 'Đã có tài khoản? '}
+          <button onClick={() => setMode(mode === 'login' ? 'register' : 'login')}
+            className="text-primary font-semibold hover:underline">
+            {mode === 'login' ? 'Đăng ký ngay' : 'Đăng nhập'}
+          </button>
+        </p>
       </div>
     </div>
   )

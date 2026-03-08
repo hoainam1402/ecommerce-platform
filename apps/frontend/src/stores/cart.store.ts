@@ -1,86 +1,85 @@
+'use client'
 import { create } from 'zustand'
+import { persist } from 'zustand/middleware'
 import { cartApi } from '@/lib/api'
 
 interface CartItem {
   id: string
-  product: { id: string; name: string; image: string; slug: string }
-  variant?: { id: string; name: string; sku: string }
+  product: { id: string; name: string; slug: string; image?: string }
+  variant?: { id: string; name: string; sku?: string }
   quantity: number
-  unitPrice: number
-  totalPrice: number
-  isOutOfStock?: boolean
-}
-
-interface Cart {
-  id: string
-  items: CartItem[]
-  subtotal: number
-  itemCount: number
+  unit_price: number
+  total_price: number
 }
 
 interface CartState {
-  cart:        Cart | null
-  isOpen:      boolean   // mini cart drawer
-  isLoading:   boolean
+  items: CartItem[]
+  subtotal: number
+  itemCount: number
+  loading: boolean
+  open: boolean
 
-  fetchCart:    () => Promise<void>
-  addItem:      (productId: string, variantId?: string, qty?: number) => Promise<void>
-  updateItem:   (itemId: string, quantity: number) => Promise<void>
-  removeItem:   (itemId: string) => Promise<void>
-  openCart:     () => void
-  closeCart:    () => void
-  toggleCart:   () => void
+  setOpen: (v: boolean) => void
+  fetchCart: () => Promise<void>
+  addItem: (productId: string, quantity: number, variantId?: string) => Promise<void>
+  updateItem: (id: string, quantity: number) => Promise<void>
+  removeItem: (id: string) => Promise<void>
+  clear: () => void
 }
 
-export const useCartStore = create<CartState>()((set, get) => ({
-  cart:      null,
-  isOpen:    false,
-  isLoading: false,
+export const useCartStore = create<CartState>()(
+  persist(
+    (set, get) => ({
+      items: [], subtotal: 0, itemCount: 0, loading: false, open: false,
 
-  fetchCart: async () => {
-    try {
-      const cart: any = await cartApi.get()
-      set({ cart })
-    } catch {}
-  },
+      setOpen: (v) => set({ open: v }),
 
-  addItem: async (productId, variantId, qty = 1) => {
-    set({ isLoading: true })
-    try {
-      const cart: any = await cartApi.add({ productId, variantId, quantity: qty })
-      set({ cart, isOpen: true, isLoading: false })
-    } catch (err) {
-      set({ isLoading: false })
-      throw err
-    }
-  },
+      fetchCart: async () => {
+        try {
+          const res = await cartApi.get()
+          const cart = res.data
+          set({
+            items:     cart?.items ?? [],
+            subtotal:  cart?.subtotal ?? 0,
+            itemCount: cart?.item_count ?? 0,
+          })
+        } catch { /* guest: ignore */ }
+      },
 
-  updateItem: async (itemId, quantity) => {
-    set({ isLoading: true })
-    try {
-      const cart: any = quantity === 0
-        ? await cartApi.remove(itemId)
-        : await cartApi.update(itemId, { quantity })
-      set({ cart: quantity === 0 ? get().cart : cart, isLoading: false })
-      if (quantity === 0) get().fetchCart()
-    } catch (err) {
-      set({ isLoading: false })
-      throw err
-    }
-  },
+      addItem: async (productId, quantity, variantId) => {
+        set({ loading: true })
+        try {
+          const res = await cartApi.add({ product_id: productId, variant_id: variantId, quantity })
+          const cart = res.data
+          set({
+            items:     cart?.items ?? [],
+            subtotal:  cart?.subtotal ?? 0,
+            itemCount: cart?.item_count ?? 0,
+            open:      true,
+          })
+        } finally {
+          set({ loading: false })
+        }
+      },
 
-  removeItem: async (itemId) => {
-    set({ isLoading: true })
-    try {
-      await cartApi.remove(itemId)
-      await get().fetchCart()
-      set({ isLoading: false })
-    } catch {
-      set({ isLoading: false })
-    }
-  },
+      updateItem: async (id, quantity) => {
+        if (quantity === 0) { get().removeItem(id); return }
+        try {
+          const res = await cartApi.update(id, quantity)
+          const cart = res.data
+          set({ items: cart?.items ?? [], subtotal: cart?.subtotal ?? 0, itemCount: cart?.item_count ?? 0 })
+        } catch {}
+      },
 
-  openCart:   () => set({ isOpen: true }),
-  closeCart:  () => set({ isOpen: false }),
-  toggleCart: () => set((s) => ({ isOpen: !s.isOpen })),
-}))
+      removeItem: async (id) => {
+        try {
+          await cartApi.remove(id)
+          await get().fetchCart()
+        } catch {}
+      },
+
+      clear: () => set({ items: [], subtotal: 0, itemCount: 0 }),
+    }),
+    { name: 'cart-storage', partialize: (s) => ({ items: s.items, subtotal: s.subtotal, itemCount: s.itemCount }) }
+  )
+)

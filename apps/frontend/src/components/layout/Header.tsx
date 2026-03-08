@@ -2,235 +2,183 @@
 import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import {
-  Search, ShoppingCart, User, Menu, X,
-  ChevronDown, Heart, Bell, LogOut, Package,
-} from 'lucide-react'
+import { Search, ShoppingCart, User, Menu, X, ChevronDown, LogOut, Package, Heart } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { useAuthStore } from '@/stores/auth.store'
 import { useCartStore } from '@/stores/cart.store'
-import { searchApi } from '@/lib/api'
+import { useAuthStore } from '@/stores/auth.store'
 
 const NAV_LINKS = [
-  { label: 'Điện thoại',  href: '/categories/dien-thoai' },
-  { label: 'Laptop',      href: '/categories/laptop' },
-  { label: 'Thời trang',  href: '/categories/thoi-trang' },
-  { label: 'Nhà bếp',     href: '/categories/nha-bep' },
-  { label: '🔥 Khuyến mãi', href: '/promotions', className: 'text-accent font-semibold' },
+  { label: 'Điện tử',    href: '/products?category=dien-thoai' },
+  { label: 'Laptop',     href: '/products?category=laptop' },
+  { label: 'Thời trang', href: '/products?category=thoi-trang' },
+  { label: 'Thể thao',   href: '/products?category=the-thao' },
+  { label: '🔥 Sale',    href: '/products?sort=price_asc', accent: true },
 ]
 
 export function Header() {
   const router = useRouter()
-  const { user, logout } = useAuthStore()
-  const { cart, toggleCart } = useCartStore()
-  const [query, setQuery]           = useState('')
-  const [suggestions, setSuggestions] = useState<string[]>([])
-  const [showSuggest, setShowSuggest] = useState(false)
-  const [mobileOpen, setMobileOpen]   = useState(false)
-  const [scrolled, setScrolled]       = useState(false)
-  const searchRef = useRef<HTMLDivElement>(null)
+  const [scrolled,   setScrolled]   = useState(false)
+  const [mobileOpen, setMobileOpen] = useState(false)
+  const [search,     setSearch]     = useState('')
+  const [userOpen,   setUserOpen]   = useState(false)
+  const userRef = useRef<HTMLDivElement>(null)
 
-  // Sticky header on scroll
+  const itemCount = useCartStore(s => s.itemCount)
+  const setCartOpen = useCartStore(s => s.setOpen)
+  const { user, logout } = useAuthStore()
+
   useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 60)
-    window.addEventListener('scroll', onScroll, { passive: true })
-    return () => window.removeEventListener('scroll', onScroll)
+    const handler = () => setScrolled(window.scrollY > 10)
+    window.addEventListener('scroll', handler)
+    return () => window.removeEventListener('scroll', handler)
   }, [])
 
-  // Autocomplete
-  useEffect(() => {
-    if (query.length < 2) { setSuggestions([]); return }
-    const timer = setTimeout(async () => {
-      try {
-        const res: any = await searchApi.autocomplete(query)
-        setSuggestions(Array.isArray(res) ? res.slice(0, 8) : [])
-        setShowSuggest(true)
-      } catch {}
-    }, 300)
-    return () => clearTimeout(timer)
-  }, [query])
-
-  // Click outside
   useEffect(() => {
     const handler = (e: MouseEvent) => {
-      if (!searchRef.current?.contains(e.target as Node)) setShowSuggest(false)
+      if (userRef.current && !userRef.current.contains(e.target as Node)) setUserOpen(false)
     }
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
   }, [])
 
-  const handleSearch = (q?: string) => {
-    const term = q ?? query
-    if (!term.trim()) return
-    setShowSuggest(false)
-    router.push(`/search?q=${encodeURIComponent(term)}`)
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (search.trim()) router.push(`/products?q=${encodeURIComponent(search.trim())}`)
   }
-
-  const itemCount = cart?.itemCount ?? 0
 
   return (
     <header className={cn(
-      'sticky top-0 z-50 bg-white transition-shadow duration-300',
-      scrolled ? 'shadow-dropdown' : 'shadow-sm',
+      'sticky top-0 z-50 transition-all duration-300 bg-white',
+      scrolled ? 'shadow-soft border-b border-border' : 'border-b border-border/50'
     )}>
-      {/* Top bar */}
-      <div className="bg-primary-600 text-white text-xs py-1.5 text-center hidden md:block">
-        🚚 Miễn phí vận chuyển đơn hàng từ 300.000đ &nbsp;|&nbsp; Hotline: 1900 xxxx
-      </div>
+      <div className="container-page">
+        <div className="flex items-center h-16 gap-4">
 
-      {/* Main header */}
-      <div className="max-w-7xl mx-auto px-4 h-16 flex items-center gap-4">
-        {/* Mobile menu */}
-        <button className="md:hidden" onClick={() => setMobileOpen(o => !o)}>
-          {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-        </button>
-
-        {/* Logo */}
-        <Link href="/" className="flex-shrink-0">
-          <span className="font-display font-black text-2xl text-primary tracking-tight">
-            ECOM<span className="text-accent">.</span>
-          </span>
-        </Link>
-
-        {/* Search bar */}
-        <div ref={searchRef} className="flex-1 max-w-2xl relative hidden md:block">
-          <div className="flex items-center border-2 border-border rounded-xl overflow-hidden focus-within:border-primary transition-colors">
-            <input
-              type="text"
-              placeholder="Tìm kiếm sản phẩm..."
-              value={query}
-              onChange={e => setQuery(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && handleSearch()}
-              onFocus={() => suggestions.length > 0 && setShowSuggest(true)}
-              className="flex-1 h-10 px-4 text-sm outline-none bg-transparent"
-            />
-            <button
-              onClick={() => handleSearch()}
-              className="h-10 px-4 bg-primary text-white hover:bg-primary-700 transition-colors"
-            >
-              <Search className="h-4 w-4" />
-            </button>
-          </div>
-
-          {/* Autocomplete dropdown */}
-          {showSuggest && suggestions.length > 0 && (
-            <div className="absolute top-full left-0 right-0 mt-1 bg-white rounded-xl shadow-dropdown border border-border z-50 overflow-hidden animate-fade-in">
-              {suggestions.map((s, i) => (
-                <button key={i}
-                  onClick={() => { setQuery(s); handleSearch(s) }}
-                  className="w-full text-left px-4 py-2.5 text-sm hover:bg-surface flex items-center gap-3">
-                  <Search className="h-3.5 w-3.5 text-text-secondary flex-shrink-0" />
-                  {s}
-                </button>
-              ))}
-              <div className="border-t border-border">
-                <button onClick={() => handleSearch()}
-                  className="w-full text-left px-4 py-2.5 text-sm text-primary font-medium hover:bg-surface">
-                  Xem tất cả kết quả cho "{query}" →
-                </button>
-              </div>
+          {/* Logo */}
+          <Link href="/" className="flex items-center gap-2 shrink-0">
+            <div className="h-8 w-8 bg-primary rounded-lg flex items-center justify-center">
+              <span className="text-white font-display font-black text-sm">E</span>
             </div>
-          )}
-        </div>
-
-        {/* Actions */}
-        <div className="flex items-center gap-1 ml-auto md:ml-0">
-          {/* Mobile search */}
-          <button className="md:hidden h-10 w-10 flex items-center justify-center hover:bg-surface rounded-lg">
-            <Search className="h-5 w-5" />
-          </button>
-
-          {/* Wishlist */}
-          <Link href="/wishlist" className="hidden md:flex h-10 w-10 items-center justify-center hover:bg-surface rounded-lg relative">
-            <Heart className="h-5 w-5 text-text-secondary" />
+            <span className="font-display font-black text-xl text-primary tracking-tight hidden sm:block">ECOM</span>
           </Link>
 
-          {/* Cart */}
-          <button onClick={toggleCart}
-            className="h-10 w-10 flex items-center justify-center hover:bg-surface rounded-lg relative">
-            <ShoppingCart className="h-5 w-5 text-text-secondary" />
-            {itemCount > 0 && (
-              <span className="absolute -top-0.5 -right-0.5 h-4 w-4 rounded-full bg-accent text-white text-[10px] font-bold flex items-center justify-center">
-                {itemCount > 9 ? '9+' : itemCount}
-              </span>
-            )}
-          </button>
-
-          {/* User */}
-          {user ? (
-            <div className="relative group hidden md:block">
-              <button className="h-10 px-3 flex items-center gap-2 hover:bg-surface rounded-lg">
-                <div className="h-7 w-7 rounded-full bg-primary-100 flex items-center justify-center">
-                  <span className="text-xs font-bold text-primary">
-                    {user.fullName?.charAt(0).toUpperCase()}
-                  </span>
-                </div>
-                <ChevronDown className="h-3.5 w-3.5 text-text-secondary" />
-              </button>
-              <div className="absolute right-0 top-full mt-1 w-52 bg-white rounded-xl shadow-dropdown border border-border overflow-hidden hidden group-hover:block animate-fade-in">
-                <div className="px-4 py-3 border-b border-border">
-                  <p className="font-semibold text-sm">{user.fullName}</p>
-                  <p className="text-xs text-text-secondary">{user.email}</p>
-                </div>
-                <Link href="/account/orders" className="flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-surface">
-                  <Package className="h-4 w-4 text-text-secondary" /> Đơn hàng của tôi
-                </Link>
-                <Link href="/account" className="flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-surface">
-                  <User className="h-4 w-4 text-text-secondary" /> Tài khoản
-                </Link>
-                <button onClick={() => logout()}
-                  className="w-full flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-surface text-accent">
-                  <LogOut className="h-4 w-4" /> Đăng xuất
-                </button>
-              </div>
+          {/* Search */}
+          <form onSubmit={handleSearch} className="flex-1 max-w-xl hidden md:block">
+            <div className="relative">
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-text-muted" />
+              <input
+                value={search} onChange={e => setSearch(e.target.value)}
+                placeholder="Tìm kiếm sản phẩm..."
+                className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-border bg-surface text-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all"
+              />
             </div>
-          ) : (
-            <Link href="/login"
-              className="hidden md:flex items-center gap-2 h-10 px-3 hover:bg-surface rounded-lg text-sm font-medium">
-              <User className="h-4 w-4 text-text-secondary" />
-              Đăng nhập
-            </Link>
-          )}
-        </div>
-      </div>
+          </form>
 
-      {/* Category nav */}
-      <nav className="hidden md:block border-t border-border">
-        <div className="max-w-7xl mx-auto px-4 flex items-center gap-6 h-10">
-          {NAV_LINKS.map(link => (
-            <Link key={link.href} href={link.href}
-              className={cn('text-sm hover:text-primary transition-colors whitespace-nowrap', link.className)}>
-              {link.label}
+          {/* Right actions */}
+          <div className="flex items-center gap-1 ml-auto">
+
+            {/* Search mobile */}
+            <Link href="/products" className="btn-ghost md:hidden p-2">
+              <Search className="h-5 w-5" />
+            </Link>
+
+            {/* Cart */}
+            <button onClick={() => setCartOpen(true)}
+              className="btn-ghost relative p-2">
+              <ShoppingCart className="h-5 w-5" />
+              {itemCount > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 h-4.5 min-w-[18px] px-1 bg-accent text-white text-[10px] font-bold rounded-full flex items-center justify-center animate-scale-in">
+                  {itemCount > 99 ? '99+' : itemCount}
+                </span>
+              )}
+            </button>
+
+            {/* User */}
+            {user ? (
+              <div ref={userRef} className="relative">
+                <button onClick={() => setUserOpen(v => !v)}
+                  className="flex items-center gap-2 btn-ghost px-2 py-1.5">
+                  <div className="h-7 w-7 bg-primary/10 rounded-full flex items-center justify-center">
+                    <span className="text-primary text-xs font-bold">{user.full_name[0]}</span>
+                  </div>
+                  <span className="text-sm font-medium hidden lg:block max-w-[100px] truncate">{user.full_name}</span>
+                  <ChevronDown className={cn('h-3.5 w-3.5 text-text-muted transition-transform', userOpen && 'rotate-180')} />
+                </button>
+
+                {userOpen && (
+                  <div className="absolute right-0 top-full mt-1.5 w-52 bg-white rounded-2xl border border-border shadow-card-hover py-1.5 animate-slide-down">
+                    <div className="px-4 py-2.5 border-b border-border mb-1">
+                      <p className="font-semibold text-sm">{user.full_name}</p>
+                      <p className="text-xs text-text-muted">{user.email}</p>
+                    </div>
+                    {[
+                      { href: '/account', icon: User,    label: 'Tài khoản' },
+                      { href: '/account?tab=orders', icon: Package, label: 'Đơn hàng' },
+                      { href: '/account?tab=wishlist', icon: Heart, label: 'Yêu thích' },
+                    ].map(({ href, icon: Icon, label }) => (
+                      <Link key={href} href={href} onClick={() => setUserOpen(false)}
+                        className="flex items-center gap-3 px-4 py-2 text-sm hover:bg-surface transition-colors">
+                        <Icon className="h-4 w-4 text-text-secondary" />
+                        {label}
+                      </Link>
+                    ))}
+                    <button onClick={() => { logout(); setUserOpen(false) }}
+                      className="w-full flex items-center gap-3 px-4 py-2 text-sm text-danger hover:bg-red-50 transition-colors mt-1 border-t border-border">
+                      <LogOut className="h-4 w-4" />
+                      Đăng xuất
+                    </button>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <Link href="/login" className="btn-primary btn-sm hidden sm:flex">
+                Đăng nhập
+              </Link>
+            )}
+
+            {/* Mobile menu */}
+            <button onClick={() => setMobileOpen(v => !v)} className="btn-ghost p-2 md:hidden">
+              {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+            </button>
+          </div>
+        </div>
+
+        {/* Nav links — desktop */}
+        <nav className="hidden md:flex items-center gap-1 h-11 -mt-1">
+          {NAV_LINKS.map(l => (
+            <Link key={l.href} href={l.href}
+              className={cn('text-sm font-medium px-3 py-1.5 rounded-lg hover:bg-surface transition-colors',
+                l.accent ? 'text-accent hover:text-orange-600' : 'text-text-secondary hover:text-primary')}>
+              {l.label}
             </Link>
           ))}
-        </div>
-      </nav>
+        </nav>
+      </div>
 
       {/* Mobile menu */}
       {mobileOpen && (
-        <div className="md:hidden border-t border-border bg-white animate-fade-in">
-          <div className="px-4 py-3">
-            <div className="flex items-center border-2 border-border rounded-xl overflow-hidden">
-              <input
-                type="text" placeholder="Tìm kiếm..." value={query}
-                onChange={e => setQuery(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && handleSearch()}
-                className="flex-1 h-10 px-4 text-sm outline-none" />
-              <button onClick={() => handleSearch()}
-                className="h-10 px-4 bg-primary text-white">
-                <Search className="h-4 w-4" />
-              </button>
-            </div>
-          </div>
-          <nav className="pb-3">
-            {NAV_LINKS.map(link => (
-              <Link key={link.href} href={link.href}
-                onClick={() => setMobileOpen(false)}
-                className={cn('block px-4 py-3 text-sm border-b border-border/50 hover:bg-surface', link.className)}>
-                {link.label}
+        <div className="md:hidden border-t border-border bg-white animate-slide-down">
+          <div className="container-page py-3 space-y-1">
+            <form onSubmit={handleSearch} className="relative mb-3">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-text-muted" />
+              <input value={search} onChange={e => setSearch(e.target.value)}
+                placeholder="Tìm kiếm..."
+                className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-border bg-surface text-sm focus:outline-none focus:border-primary" />
+            </form>
+            {NAV_LINKS.map(l => (
+              <Link key={l.href} href={l.href} onClick={() => setMobileOpen(false)}
+                className={cn('block px-3 py-2.5 text-sm font-medium rounded-xl hover:bg-surface',
+                  l.accent ? 'text-accent' : 'text-text-primary')}>
+                {l.label}
               </Link>
             ))}
-          </nav>
+            {!user && (
+              <Link href="/login" onClick={() => setMobileOpen(false)}
+                className="block btn-primary text-center mt-2">
+                Đăng nhập / Đăng ký
+              </Link>
+            )}
+          </div>
         </div>
       )}
     </header>

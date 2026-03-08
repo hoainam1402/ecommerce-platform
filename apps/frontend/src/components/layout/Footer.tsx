@@ -1,97 +1,59 @@
 import Link from 'next/link'
-import { Facebook, Instagram, Youtube, Mail, Phone, MapPin } from 'lucide-react'
 
-const FOOTER_LINKS = {
-  'Về chúng tôi': [
-    { label: 'Giới thiệu', href: '/about' },
-    { label: 'Tuyển dụng', href: '/careers' },
-    { label: 'Tin tức', href: '/blog' },
-    { label: 'Liên hệ', href: '/contact' },
-  ],
-  'Hỗ trợ khách hàng': [
-    { label: 'Chính sách đổi trả', href: '/return-policy' },
-    { label: 'Chính sách vận chuyển', href: '/shipping-policy' },
-    { label: 'Hướng dẫn mua hàng', href: '/how-to-buy' },
-    { label: 'Câu hỏi thường gặp', href: '/faq' },
-  ],
-  'Danh mục sản phẩm': [
-    { label: 'Điện thoại', href: '/categories/dien-thoai' },
-    { label: 'Laptop', href: '/categories/laptop' },
-    { label: 'Thời trang', href: '/categories/thoi-trang' },
-    { label: 'Nhà bếp', href: '/categories/nha-bep' },
-  ],
+const LINKS = {
+  'Sản phẩm':    [{ label: 'Điện thoại', href: '/products?category=dien-thoai' }, { label: 'Laptop', href: '/products?category=laptop' }, { label: 'Thời trang', href: '/products?category=thoi-trang' }, { label: 'Thể thao', href: '/products?category=the-thao' }],
+  'Hỗ trợ':      [{ label: 'Trung tâm hỗ trợ', href: '#' }, { label: 'Theo dõi đơn hàng', href: '/account?tab=orders' }, { label: 'Đổi trả hàng', href: '#' }, { label: 'Chính sách bảo hành', href: '#' }],
+  'Về chúng tôi':[{ label: 'Giới thiệu', href: '#' }, { label: 'Tuyển dụng', href: '#' }, { label: 'Blog', href: '#' }, { label: 'Liên hệ', href: '#' }],
 }
 
 export function Footer() {
   return (
-    <footer className="bg-primary-600 text-white mt-16">
-      {/* Main footer */}
-      <div className="max-w-7xl mx-auto px-4 py-12 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-8">
-        {/* Brand */}
-        <div className="lg:col-span-2">
-          <span className="font-display font-black text-3xl tracking-tight">
-            ECOM<span className="text-accent">.</span>
-          </span>
-          <p className="mt-3 text-primary-100 text-sm leading-relaxed max-w-xs">
-            Nền tảng mua sắm trực tuyến tin cậy, mang đến trải nghiệm mua sắm tốt nhất cho khách hàng.
-          </p>
-
-          {/* Contact */}
-          <div className="mt-4 space-y-2 text-sm text-primary-100">
-            <div className="flex items-center gap-2">
-              <Phone className="h-4 w-4 flex-shrink-0" />
-              <span>1900 xxxx (8:00 - 21:00)</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <Mail className="h-4 w-4 flex-shrink-0" />
-              <span>support@ecommerce.vn</span>
-            </div>
-            <div className="flex items-start gap-2">
-              <MapPin className="h-4 w-4 flex-shrink-0 mt-0.5" />
-              <span>123 Nguyễn Huệ, Q.1, TP.HCM</span>
+    <footer className="bg-primary-900 text-white mt-16">
+      <div className="container-page py-12">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
+          {/* Brand */}
+          <div className="col-span-2 md:col-span-1">
+            <Link href="/" className="flex items-center gap-2 mb-4">
+              <div className="h-8 w-8 bg-white rounded-lg flex items-center justify-center">
+                <span className="text-primary font-display font-black text-sm">E</span>
+              </div>
+              <span className="font-display font-black text-xl">ECOM</span>
+            </Link>
+            <p className="text-white/60 text-sm leading-relaxed">
+              Nền tảng mua sắm trực tuyến tin cậy với hàng ngàn sản phẩm chính hãng.
+            </p>
+            <div className="flex gap-3 mt-5">
+              {['Facebook', 'Instagram', 'TikTok'].map(s => (
+                <a key={s} href="#" className="text-xs px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 transition-colors font-medium">
+                  {s}
+                </a>
+              ))}
             </div>
           </div>
 
-          {/* Social */}
-          <div className="flex items-center gap-3 mt-5">
-            {[
-              { icon: Facebook,  href: '#', label: 'Facebook' },
-              { icon: Instagram, href: '#', label: 'Instagram' },
-              { icon: Youtube,   href: '#', label: 'Youtube' },
-            ].map(({ icon: Icon, href, label }) => (
-              <a key={label} href={href} aria-label={label}
-                className="h-9 w-9 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20 transition-colors">
-                <Icon className="h-4 w-4" />
-              </a>
-            ))}
-          </div>
+          {/* Links */}
+          {Object.entries(LINKS).map(([title, links]) => (
+            <div key={title}>
+              <h3 className="font-bold text-sm mb-4">{title}</h3>
+              <ul className="space-y-2.5">
+                {links.map(l => (
+                  <li key={l.href}>
+                    <Link href={l.href} className="text-white/60 text-sm hover:text-white transition-colors">
+                      {l.label}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
         </div>
 
-        {/* Links */}
-        {Object.entries(FOOTER_LINKS).map(([title, links]) => (
-          <div key={title}>
-            <h3 className="font-semibold text-sm uppercase tracking-wider mb-4">{title}</h3>
-            <ul className="space-y-2.5">
-              {links.map(link => (
-                <li key={link.href}>
-                  <Link href={link.href}
-                    className="text-sm text-primary-100 hover:text-white transition-colors">
-                    {link.label}
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </div>
-        ))}
-      </div>
-
-      {/* Bottom bar */}
-      <div className="border-t border-white/10">
-        <div className="max-w-7xl mx-auto px-4 py-4 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-primary-200">
-          <p>© 2026 ECOM. Bảo lưu mọi quyền.</p>
-          <div className="flex items-center gap-4">
-            <Link href="/privacy" className="hover:text-white transition-colors">Chính sách bảo mật</Link>
-            <Link href="/terms"   className="hover:text-white transition-colors">Điều khoản dịch vụ</Link>
+        <div className="border-t border-white/10 mt-10 pt-6 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-white/40">
+          <p>© 2026 ECOM. All rights reserved.</p>
+          <div className="flex gap-5">
+            <Link href="#" className="hover:text-white/70">Điều khoản</Link>
+            <Link href="#" className="hover:text-white/70">Bảo mật</Link>
+            <Link href="#" className="hover:text-white/70">Cookie</Link>
           </div>
         </div>
       </div>

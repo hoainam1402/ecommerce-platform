@@ -1,134 +1,115 @@
 'use client'
+import { useEffect } from 'react'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import { useQuery } from '@tanstack/react-query'
-import { CheckCircle, Package, MapPin, CreditCard, ArrowRight } from 'lucide-react'
+import { CheckCircle2, Package, Truck, MapPin, CreditCard, ArrowRight } from 'lucide-react'
 import { orderApi } from '@/lib/api'
-import { Button } from '@/components/ui/Button'
 import { formatPrice, formatDate } from '@/lib/utils'
 
 export default function OrderSuccessPage() {
   const { id } = useParams<{ id: string }>()
-  const { data: order } = useQuery({
+
+  const { data } = useQuery({
     queryKey: ['order', id],
     queryFn:  () => orderApi.detail(id),
     enabled:  !!id,
   })
-  const o = order as any
+  const order = data?.data
 
   return (
     <div className="container-page py-12 max-w-2xl">
-      {/* Success state */}
-      <div className="text-center mb-8">
-        <div className="flex justify-center mb-4">
-          <div className="h-20 w-20 rounded-full bg-green-50 flex items-center justify-center">
-            <CheckCircle className="h-12 w-12 text-success" strokeWidth={1.5} />
-          </div>
+      {/* Success header */}
+      <div className="text-center mb-8 animate-fade-in">
+        <div className="inline-flex items-center justify-center h-20 w-20 bg-success/10 rounded-full mb-4">
+          <CheckCircle2 className="h-10 w-10 text-success" />
         </div>
-        <h1 className="font-display font-black text-3xl text-text-primary">Đặt hàng thành công!</h1>
-        {o && (
-          <>
-            <p className="text-text-secondary mt-2 text-sm">
-              Mã đơn hàng: <span className="font-mono font-bold text-text-primary">{o.orderNumber}</span>
-            </p>
-            <p className="text-text-secondary text-xs mt-1">
-              Email xác nhận đã gửi đến: <span className="font-medium">{o.user?.email}</span>
-            </p>
-          </>
+        <h1 className="font-display font-black text-3xl text-primary">Đặt hàng thành công!</h1>
+        {order && (
+          <p className="text-text-muted mt-2">
+            Mã đơn hàng: <span className="font-mono font-bold text-primary">{order.order_number}</span>
+          </p>
         )}
+        <p className="text-text-secondary text-sm mt-2">Email xác nhận đã được gửi đến tài khoản của bạn</p>
       </div>
 
-      {/* Order summary card */}
-      {o && (
-        <div className="bg-white rounded-2xl shadow-card overflow-hidden mb-6">
-          <div className="px-5 py-4 bg-surface border-b border-border">
-            <h2 className="font-semibold text-text-primary">Tóm tắt đơn hàng</h2>
+      {order && (
+        <div className="card p-6 space-y-5 animate-slide-up">
+          {/* Shipping */}
+          <div className="flex items-start gap-3">
+            <div className="h-9 w-9 bg-blue-50 rounded-xl flex items-center justify-center shrink-0">
+              <MapPin className="h-4 w-4 text-blue-600" />
+            </div>
+            <div>
+              <p className="font-semibold text-sm">Giao đến</p>
+              <p className="text-sm text-text-secondary mt-0.5">
+                {order.shipping_name} · {order.shipping_phone}
+              </p>
+              <p className="text-sm text-text-secondary">
+                {order.shipping_address}, {order.shipping_ward}, {order.shipping_district}, {order.shipping_province}
+              </p>
+            </div>
           </div>
 
-          {/* Shipping info */}
-          <div className="px-5 py-4 border-b border-border space-y-2">
-            <div className="flex items-start gap-2.5">
-              <MapPin className="h-4 w-4 text-text-secondary flex-shrink-0 mt-0.5" />
-              <div>
-                <p className="text-sm font-medium">{o.shippingName} — {o.shippingPhone}</p>
-                <p className="text-xs text-text-secondary">
-                  {o.shippingAddress}, {o.shippingWard}, {o.shippingDistrict}, {o.shippingProvince}
-                </p>
-              </div>
+          {/* Payment */}
+          <div className="flex items-start gap-3">
+            <div className="h-9 w-9 bg-green-50 rounded-xl flex items-center justify-center shrink-0">
+              <CreditCard className="h-4 w-4 text-green-600" />
             </div>
-            {o.shipment?.estimatedDelivery && (
-              <div className="flex items-center gap-2.5">
-                <Package className="h-4 w-4 text-text-secondary flex-shrink-0" />
-                <p className="text-sm text-text-secondary">
-                  Dự kiến giao: <span className="font-medium text-text-primary">{formatDate(o.shipment.estimatedDelivery)}</span>
-                  {o.shipment.provider && ` (${o.shipment.provider.toUpperCase()})`}
-                </p>
-              </div>
-            )}
-            {o.payment && (
-              <div className="flex items-center gap-2.5">
-                <CreditCard className="h-4 w-4 text-text-secondary flex-shrink-0" />
-                <p className="text-sm text-text-secondary">
-                  Thanh toán: <span className="font-medium text-text-primary">{o.payment.method?.toUpperCase()}</span>
-                  {o.payment.status === 'paid' && (
-                    <span className="ml-2 text-success text-xs font-medium">✓ ĐÃ THANH TOÁN</span>
-                  )}
-                </p>
-              </div>
-            )}
+            <div>
+              <p className="font-semibold text-sm">Thanh toán</p>
+              <p className="text-sm text-text-secondary mt-0.5 capitalize">
+                {order.payment?.method?.toUpperCase() ?? 'COD'} ·
+                <span className={order.payment?.status === 'paid' ? ' text-success font-medium' : ' text-warning font-medium'}>
+                  {' '}{order.payment?.status === 'paid' ? 'Đã thanh toán ✓' : 'Thanh toán khi nhận'}
+                </span>
+              </p>
+            </div>
           </div>
 
           {/* Items */}
-          <div className="px-5 py-4 space-y-3">
-            {o.items?.slice(0, 3).map((item: any) => (
-              <div key={item.id} className="flex items-center justify-between gap-3 text-sm">
-                <div className="flex-1 min-w-0">
-                  <p className="font-medium line-clamp-1">{item.productName}</p>
-                  {item.variantName && <p className="text-xs text-text-secondary">{item.variantName}</p>}
-                  <p className="text-xs text-text-secondary">x{item.quantity}</p>
+          <div className="border-t border-border pt-4">
+            <p className="font-semibold text-sm mb-3">Sản phẩm ({order.items?.length ?? 0})</p>
+            <div className="space-y-2.5">
+              {order.items?.map((item: any) => (
+                <div key={item.id} className="flex items-center gap-3">
+                  <span className="text-xs text-text-muted w-5 text-center shrink-0">{item.quantity}×</span>
+                  <p className="text-sm flex-1 line-clamp-1">{item.product_name}</p>
+                  <p className="text-sm font-semibold shrink-0">{formatPrice(item.total_price)}</p>
                 </div>
-                <span className="font-semibold flex-shrink-0">{formatPrice(item.totalPrice)}</span>
-              </div>
-            ))}
-            {o.items?.length > 3 && (
-              <p className="text-xs text-text-secondary">+{o.items.length - 3} sản phẩm khác...</p>
-            )}
+              ))}
+            </div>
           </div>
 
           {/* Total */}
-          <div className="px-5 py-4 bg-surface border-t border-border space-y-1.5 text-sm">
+          <div className="border-t border-border pt-4 space-y-1.5 text-sm">
             <div className="flex justify-between text-text-secondary">
-              <span>Tạm tính</span><span>{formatPrice(o.subtotal)}</span>
+              <span>Tạm tính</span><span>{formatPrice(order.subtotal)}</span>
             </div>
             <div className="flex justify-between text-text-secondary">
-              <span>Vận chuyển</span><span>{formatPrice(o.shippingFee)}</span>
+              <span>Vận chuyển</span><span>{order.shipping_fee == 0 ? <span className="text-success">Miễn phí</span> : formatPrice(order.shipping_fee)}</span>
             </div>
-            {o.discountAmount > 0 && (
+            {order.discount_amount > 0 && (
               <div className="flex justify-between text-success">
-                <span>Giảm giá</span><span>-{formatPrice(o.discountAmount)}</span>
+                <span>Giảm giá</span><span>-{formatPrice(order.discount_amount)}</span>
               </div>
             )}
-            <div className="flex justify-between font-bold text-base pt-1 border-t border-border">
+            <div className="flex justify-between font-bold text-base pt-2 border-t border-border">
               <span>Tổng cộng</span>
-              <span className="text-primary">{formatPrice(o.totalAmount)}</span>
+              <span className="text-danger font-display font-black text-xl">{formatPrice(order.total_amount)}</span>
             </div>
           </div>
         </div>
       )}
 
-      {/* Actions */}
-      <div className="flex flex-col sm:flex-row gap-3">
-        <Button variant="outline" size="lg" className="flex-1">
-          <Link href={`/account/orders`} className="flex items-center gap-2 justify-center w-full">
-            <Package className="h-4 w-4" /> Xem chi tiết đơn hàng
-          </Link>
-        </Button>
-        <Button variant="primary" size="lg" className="flex-1"
-          rightIcon={<ArrowRight className="h-4 w-4" />}>
-          <Link href="/" className="flex items-center gap-2 justify-center w-full">
-            Tiếp tục mua sắm
-          </Link>
-        </Button>
+      {/* CTA */}
+      <div className="flex flex-col sm:flex-row gap-3 mt-6">
+        <Link href="/account?tab=orders" className="btn-outline flex-1 gap-2 justify-center py-3">
+          <Package className="h-4 w-4" /> Xem đơn hàng
+        </Link>
+        <Link href="/" className="btn-primary flex-1 gap-2 justify-center py-3">
+          Tiếp tục mua sắm <ArrowRight className="h-4 w-4" />
+        </Link>
       </div>
     </div>
   )

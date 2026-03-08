@@ -1,272 +1,228 @@
 'use client'
-import { useState, useCallback } from 'react'
-import { useSearchParams, useRouter, usePathname } from 'next/navigation'
+import { useState, useEffect } from 'react'
+import { useSearchParams, useRouter } from 'next/navigation'
 import { useQuery } from '@tanstack/react-query'
-import { SlidersHorizontal, LayoutGrid, List, X, ChevronDown, ChevronUp } from 'lucide-react'
-import { productApi, searchApi } from '@/lib/api'
-import { ProductCard } from '@/components/ui/ProductCard'
-import { ProductCardSkeleton } from '@/components/ui/Skeleton'
-import { Button } from '@/components/ui/Button'
-import { cn, formatPrice } from '@/lib/utils'
+import { Filter, SlidersHorizontal, Grid3X3, List, ChevronDown, X } from 'lucide-react'
+import { productApi } from '@/lib/api'
+import { ProductCard, ProductCardSkeleton } from '@/components/ui/ProductCard'
+import { cn } from '@/lib/utils'
 
 const SORT_OPTIONS = [
   { value: 'newest',     label: 'Mới nhất' },
-  { value: 'best_seller', label: 'Bán chạy' },
+  { value: 'best_seller',label: 'Bán chạy' },
   { value: 'top_rated',  label: 'Đánh giá cao' },
   { value: 'price_asc',  label: 'Giá tăng dần' },
   { value: 'price_desc', label: 'Giá giảm dần' },
 ]
 
-const RATING_OPTIONS = [5, 4, 3]
+const PRICE_RANGES = [
+  { label: 'Dưới 500K',        min: 0,         max: 500000 },
+  { label: '500K – 2 triệu',   min: 500000,    max: 2000000 },
+  { label: '2 – 10 triệu',     min: 2000000,   max: 10000000 },
+  { label: '10 – 30 triệu',    min: 10000000,  max: 30000000 },
+  { label: 'Trên 30 triệu',    min: 30000000,  max: undefined },
+]
 
-function FilterSection({ title, children, defaultOpen = true }:
-  { title: string; children: React.ReactNode; defaultOpen?: boolean }) {
-  const [open, setOpen] = useState(defaultOpen)
-  return (
-    <div className="border-b border-border pb-4 mb-4">
-      <button onClick={() => setOpen(o => !o)}
-        className="flex items-center justify-between w-full py-1 text-sm font-semibold text-text-primary">
-        {title}
-        {open ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-      </button>
-      {open && <div className="mt-3">{children}</div>}
-    </div>
-  )
-}
+const RATINGS = [5, 4, 3]
 
-export default function PLPPage() {
-  const router      = useRouter()
-  const pathname    = usePathname()
+export default function ProductsPage() {
   const searchParams = useSearchParams()
-  const [showFilter, setShowFilter] = useState(false)
-  const [viewMode,   setViewMode]   = useState<'grid' | 'list'>('grid')
+  const router = useRouter()
 
-  // Read params
-  const q          = searchParams.get('q') ?? ''
-  const sort       = searchParams.get('sort') ?? 'newest'
-  const minPrice   = searchParams.get('min_price')
-  const maxPrice   = searchParams.get('max_price')
-  const minRating  = searchParams.get('min_rating')
-  const categoryId = searchParams.get('category_id')
-  const page       = Number(searchParams.get('page') ?? 1)
+  const [sort,      setSort]      = useState(searchParams.get('sort')     || 'newest')
+  const [q,         setQ]         = useState(searchParams.get('q')        || '')
+  const [priceIdx,  setPriceIdx]  = useState<number | null>(null)
+  const [minRating, setMinRating] = useState<number | null>(null)
+  const [page,      setPage]      = useState(1)
+  const [gridView,  setGridView]  = useState<'grid' | 'list'>('grid')
+  const [filterOpen,setFilterOpen]= useState(false)
 
-  const updateParam = useCallback((key: string, value: string | null) => {
-    const params = new URLSearchParams(searchParams.toString())
-    if (value === null) params.delete(key)
-    else { params.set(key, value); params.set('page', '1') }
-    router.push(`${pathname}?${params.toString()}`)
-  }, [searchParams, pathname, router])
+  const priceRange = priceIdx !== null ? PRICE_RANGES[priceIdx] : null
 
-  // Fetch products
-  const { data, isLoading } = useQuery({
-    queryKey: ['products', 'list', Object.fromEntries(searchParams.entries())],
-    queryFn:  () => productApi.list({
-      q, sort, min_price: minPrice, max_price: maxPrice,
-      min_rating: minRating, category_id: categoryId, page, limit: 20,
-    }),
+  const queryParams = {
+    q: q || undefined,
+    sort,
+    min_price: priceRange?.min,
+    max_price: priceRange?.max,
+    min_rating: minRating ?? undefined,
+    page, limit: 20,
+  }
+
+  const { data, isLoading, isFetching } = useQuery({
+    queryKey: ['products', queryParams],
+    queryFn:  () => productApi.list(queryParams),
+    placeholderData: (prev) => prev,
   })
 
-  const products: any[]  = (data as any)?.items ?? (Array.isArray(data) ? data : [])
-  const meta: any        = (data as any)?.meta ?? {}
-  const totalCount       = meta.total ?? products.length
+  const products = Array.isArray(data?.data) ? data.data : []
+  const meta     = data?.meta
 
-  // Active filters for chips
-  const activeFilters = [
-    minRating  && { key: 'min_rating',  label: `≥ ${minRating} sao` },
-    minPrice   && { key: 'min_price',   label: `Từ ${formatPrice(+minPrice)}` },
-    maxPrice   && { key: 'max_price',   label: `Đến ${formatPrice(+maxPrice)}` },
-    categoryId && { key: 'category_id', label: 'Danh mục đã chọn' },
-  ].filter(Boolean) as { key: string; label: string }[]
+  const activeFilters: string[] = []
+  if (q)         activeFilters.push(`"${q}"`)
+  if (priceRange) activeFilters.push(priceRange.label)
+  if (minRating) activeFilters.push(`${minRating}★ trở lên`)
 
-  const FilterPanel = (
-    <aside className="w-56 flex-shrink-0 space-y-0">
-      {/* Price range */}
-      <FilterSection title="Khoảng giá">
-        <div className="space-y-2">
-          {[
-            [null, '200000',     'Dưới 200.000đ'],
-            ['200000', '500000', '200k - 500k'],
-            ['500000', '1000000','500k - 1 triệu'],
-            ['1000000', '5000000','1 - 5 triệu'],
-            ['5000000', null,    'Trên 5 triệu'],
-          ].map(([min, max, label]) => (
-            <button key={label as string}
-              onClick={() => {
-                updateParam('min_price', min as string | null)
-                updateParam('max_price', max as string | null)
-              }}
-              className={cn('flex items-center gap-2 text-sm w-full text-left hover:text-primary transition-colors',
-                minPrice === min && maxPrice === max ? 'text-primary font-medium' : 'text-text-secondary',
-              )}>
-              <span className={cn('h-4 w-4 rounded border-2 flex-shrink-0 transition-colors',
-                minPrice === min && maxPrice === max ? 'border-primary bg-primary' : 'border-border')} />
-              {label}
-            </button>
+  // ── Sidebar ───────────────────────────────────────────
+  const Sidebar = () => (
+    <div className="space-y-6">
+      {/* Price */}
+      <div>
+        <h3 className="font-semibold text-sm text-text-primary mb-3">Khoảng giá</h3>
+        <div className="space-y-1.5">
+          {PRICE_RANGES.map((r, i) => (
+            <label key={i} className="flex items-center gap-2.5 cursor-pointer group">
+              <input type="radio" name="price" checked={priceIdx === i}
+                onChange={() => { setPriceIdx(i === priceIdx ? null : i); setPage(1) }}
+                className="accent-primary" />
+              <span className={cn('text-sm transition-colors', priceIdx === i ? 'text-primary font-semibold' : 'text-text-secondary group-hover:text-primary')}>
+                {r.label}
+              </span>
+            </label>
           ))}
         </div>
-      </FilterSection>
+      </div>
 
       {/* Rating */}
-      <FilterSection title="Đánh giá">
-        <div className="space-y-2">
-          {RATING_OPTIONS.map(r => (
-            <button key={r}
-              onClick={() => updateParam('min_rating', minRating === String(r) ? null : String(r))}
-              className={cn('flex items-center gap-2 text-sm w-full text-left hover:text-primary transition-colors',
-                minRating === String(r) ? 'text-primary font-medium' : 'text-text-secondary',
-              )}>
-              <span className={cn('h-4 w-4 rounded border-2 flex-shrink-0',
-                minRating === String(r) ? 'border-primary bg-primary' : 'border-border')} />
-              {'⭐'.repeat(r)} trở lên
-            </button>
+      <div>
+        <h3 className="font-semibold text-sm text-text-primary mb-3">Đánh giá</h3>
+        <div className="space-y-1.5">
+          {RATINGS.map(r => (
+            <label key={r} className="flex items-center gap-2.5 cursor-pointer group">
+              <input type="radio" name="rating" checked={minRating === r}
+                onChange={() => { setMinRating(r === minRating ? null : r); setPage(1) }}
+                className="accent-primary" />
+              <span className="flex items-center gap-1 text-sm text-text-secondary group-hover:text-primary transition-colors">
+                {'★'.repeat(r)}<span className="text-text-muted">{'☆'.repeat(5 - r)}</span>
+                <span className="ml-1">trở lên</span>
+              </span>
+            </label>
           ))}
         </div>
-      </FilterSection>
-    </aside>
+      </div>
+
+      {/* Clear */}
+      {(priceIdx !== null || minRating !== null) && (
+        <button onClick={() => { setPriceIdx(null); setMinRating(null); setPage(1) }}
+          className="text-sm text-danger hover:underline flex items-center gap-1">
+          <X className="h-3.5 w-3.5" /> Xoá bộ lọc
+        </button>
+      )}
+    </div>
   )
 
   return (
     <div className="container-page py-6">
-      {/* Breadcrumb */}
-      <nav className="text-xs text-text-secondary mb-4 flex items-center gap-1.5">
-        <a href="/" className="hover:text-primary">Trang chủ</a>
-        <span>/</span>
-        <span className="text-text-primary font-medium">
-          {q ? `Kết quả cho "${q}"` : 'Tất cả sản phẩm'}
-        </span>
-      </nav>
-
       {/* Top bar */}
-      <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
-        <div className="flex items-center gap-3">
-          <h1 className="text-xl font-bold text-text-primary">
-            {q ? `Kết quả cho "${q}"` : 'Sản phẩm'}
+      <div className="flex flex-wrap items-center gap-3 mb-5">
+        <div className="flex-1 min-w-0">
+          <h1 className="font-display font-bold text-xl">
+            {q ? `Kết quả cho "${q}"` : 'Tất cả sản phẩm'}
           </h1>
-          {totalCount > 0 && (
-            <span className="text-sm text-text-secondary">({totalCount} sản phẩm)</span>
+          {meta?.total != null && (
+            <p className="text-sm text-text-muted mt-0.5">{meta.total.toLocaleString('vi-VN')} sản phẩm</p>
           )}
         </div>
 
-        <div className="flex items-center gap-3">
-          {/* Mobile filter toggle */}
-          <Button variant="outline" size="sm"
-            onClick={() => setShowFilter(s => !s)}
-            className="md:hidden"
-            leftIcon={<SlidersHorizontal className="h-4 w-4" />}>
-            Lọc
-          </Button>
-
-          {/* Sort */}
-          <select
-            value={sort}
-            onChange={e => updateParam('sort', e.target.value)}
-            className="input-base h-9 w-auto text-sm pr-8 cursor-pointer"
-          >
-            {SORT_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-          </select>
-
-          {/* View mode */}
-          <div className="hidden md:flex items-center border border-border rounded-lg overflow-hidden">
-            <button onClick={() => setViewMode('grid')}
-              className={cn('h-9 w-9 flex items-center justify-center transition-colors',
-                viewMode === 'grid' ? 'bg-primary text-white' : 'hover:bg-surface text-text-secondary')}>
-              <LayoutGrid className="h-4 w-4" />
-            </button>
-            <button onClick={() => setViewMode('list')}
-              className={cn('h-9 w-9 flex items-center justify-center transition-colors',
-                viewMode === 'list' ? 'bg-primary text-white' : 'hover:bg-surface text-text-secondary')}>
-              <List className="h-4 w-4" />
-            </button>
+        {/* Active filter chips */}
+        {activeFilters.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {activeFilters.map(f => (
+              <span key={f} className="flex items-center gap-1 text-xs bg-primary/10 text-primary px-3 py-1 rounded-full font-medium">
+                {f}
+              </span>
+            ))}
           </div>
+        )}
+
+        {/* Sort */}
+        <div className="flex items-center gap-2 ml-auto">
+          <div className="relative">
+            <select value={sort} onChange={e => { setSort(e.target.value); setPage(1) }}
+              className="appearance-none pl-3 pr-8 py-2 text-sm border border-border rounded-xl bg-white focus:outline-none focus:border-primary cursor-pointer">
+              {SORT_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
+            <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-text-muted pointer-events-none" />
+          </div>
+
+          {/* Grid/list toggle */}
+          <div className="hidden sm:flex border border-border rounded-xl overflow-hidden">
+            {(['grid','list'] as const).map(v => (
+              <button key={v} onClick={() => setGridView(v)}
+                className={cn('p-2 transition-colors', gridView === v ? 'bg-primary text-white' : 'text-text-muted hover:bg-surface')}>
+                {v === 'grid' ? <Grid3X3 className="h-4 w-4" /> : <List className="h-4 w-4" />}
+              </button>
+            ))}
+          </div>
+
+          {/* Mobile filter toggle */}
+          <button onClick={() => setFilterOpen(v => !v)}
+            className="flex items-center gap-1.5 btn-outline btn-sm lg:hidden">
+            <SlidersHorizontal className="h-4 w-4" /> Lọc
+          </button>
         </div>
       </div>
 
-      {/* Active filter chips */}
-      {activeFilters.length > 0 && (
-        <div className="flex items-center gap-2 flex-wrap mb-4">
-          <span className="text-xs text-text-secondary">Đang lọc:</span>
-          {activeFilters.map(f => (
-            <button key={f.key}
-              onClick={() => updateParam(f.key, null)}
-              className="flex items-center gap-1 bg-primary-50 text-primary text-xs px-3 py-1.5 rounded-full hover:bg-primary-100 transition-colors font-medium">
-              {f.label}
-              <X className="h-3 w-3" />
-            </button>
-          ))}
-          <button
-            onClick={() => router.push(pathname)}
-            className="text-xs text-text-secondary underline hover:text-accent">
-            Xóa tất cả
-          </button>
-        </div>
-      )}
-
       <div className="flex gap-6">
-        {/* Desktop sidebar */}
-        <div className="hidden md:block">{FilterPanel}</div>
+        {/* Sidebar desktop */}
+        <aside className="hidden lg:block w-52 shrink-0">
+          <div className="card p-4 sticky top-24">
+            <h2 className="font-semibold mb-4 flex items-center gap-2">
+              <Filter className="h-4 w-4" /> Bộ lọc
+            </h2>
+            <Sidebar />
+          </div>
+        </aside>
 
-        {/* Mobile filter panel */}
-        {showFilter && (
-          <div className="md:hidden fixed inset-0 z-50 flex">
-            <div className="absolute inset-0 bg-black/40" onClick={() => setShowFilter(false)} />
-            <div className="relative ml-auto w-72 h-full bg-white overflow-y-auto p-4 animate-slide-in-right">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="font-semibold">Bộ lọc</h3>
-                <button onClick={() => setShowFilter(false)}><X className="h-5 w-5" /></button>
+        {/* Mobile filter drawer */}
+        {filterOpen && (
+          <div className="fixed inset-0 z-40 lg:hidden">
+            <div className="absolute inset-0 bg-black/40" onClick={() => setFilterOpen(false)} />
+            <div className="absolute bottom-0 left-0 right-0 bg-white rounded-t-3xl p-6 animate-slide-up max-h-[80vh] overflow-y-auto">
+              <div className="flex items-center justify-between mb-5">
+                <h2 className="font-bold text-lg">Bộ lọc</h2>
+                <button onClick={() => setFilterOpen(false)}><X className="h-5 w-5" /></button>
               </div>
-              {FilterPanel}
+              <Sidebar />
+              <button onClick={() => setFilterOpen(false)} className="btn-primary w-full mt-6">
+                Áp dụng ({products.length} sản phẩm)
+              </button>
             </div>
           </div>
         )}
 
-        {/* Product grid */}
+        {/* Products */}
         <div className="flex-1 min-w-0">
           {isLoading ? (
-            <div className={cn('grid gap-4',
-              viewMode === 'grid' ? 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-4' : 'grid-cols-1')}>
+            <div className={cn('grid gap-4', gridView === 'grid'
+              ? 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-4'
+              : 'grid-cols-1')}>
               {Array.from({ length: 12 }).map((_, i) => <ProductCardSkeleton key={i} />)}
             </div>
           ) : products.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-20 text-text-secondary gap-3">
-              <span className="text-5xl">😕</span>
-              <p className="font-medium">Không tìm thấy sản phẩm phù hợp</p>
-              <Button variant="outline" size="sm" onClick={() => router.push(pathname)}>
-                Xóa bộ lọc
-              </Button>
+            <div className="flex flex-col items-center justify-center py-24 text-center">
+              <p className="text-5xl mb-4">🔍</p>
+              <p className="font-bold text-lg">Không tìm thấy sản phẩm</p>
+              <p className="text-text-muted text-sm mt-2">Thử thay đổi bộ lọc hoặc từ khoá tìm kiếm</p>
+              <button onClick={() => { setQ(''); setPriceIdx(null); setMinRating(null) }}
+                className="btn-outline mt-5">Xoá bộ lọc</button>
             </div>
           ) : (
             <>
-              <div className={cn('grid gap-4',
-                viewMode === 'grid'
-                  ? 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-4'
-                  : 'grid-cols-1')}>
-                {products.map((p: any) => (
-                  <ProductCard key={p.id} product={p}
-                    variant={viewMode === 'list' ? 'horizontal' : 'vertical'} />
-                ))}
+              <div className={cn('grid gap-4 transition-opacity', isFetching && 'opacity-60',
+                gridView === 'grid' ? 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-4' : 'grid-cols-1')}>
+                {products.map(p => <ProductCard key={p.id} product={p} />)}
               </div>
 
               {/* Pagination */}
-              {meta.totalPages > 1 && (
+              {meta && meta.totalPages > 1 && (
                 <div className="flex items-center justify-center gap-2 mt-8">
-                  {Array.from({ length: meta.totalPages }, (_, i) => i + 1)
-                    .filter(p => p === 1 || p === meta.totalPages || Math.abs(p - page) <= 2)
-                    .map((p, idx, arr) => (
-                      <span key={p}>
-                        {idx > 0 && arr[idx-1] !== p - 1 && (
-                          <span className="text-text-secondary px-1">...</span>
-                        )}
-                        <button
-                          onClick={() => updateParam('page', String(p))}
-                          className={cn('h-9 w-9 rounded-lg text-sm font-medium transition-colors',
-                            p === page
-                              ? 'bg-primary text-white'
-                              : 'border border-border hover:border-primary hover:text-primary')}>
-                          {p}
-                        </button>
-                      </span>
-                    ))
-                  }
+                  <button disabled={page <= 1} onClick={() => setPage(p => p - 1)}
+                    className="btn-outline btn-sm disabled:opacity-40">← Trước</button>
+                  <span className="text-sm text-text-secondary px-3">
+                    Trang {page} / {meta.totalPages}
+                  </span>
+                  <button disabled={page >= meta.totalPages} onClick={() => setPage(p => p + 1)}
+                    className="btn-outline btn-sm disabled:opacity-40">Tiếp →</button>
                 </div>
               )}
             </>
