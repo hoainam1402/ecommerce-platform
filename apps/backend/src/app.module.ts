@@ -9,6 +9,9 @@ import { UsersModule } from './users/users.module';
 import { ProductsModule } from './products/products.module';
 import { CartModule } from './cart/cart.module';
 import { OrderModule } from './orders/order.module';
+import { PromotionModule } from './promotions/promotion.module';
+import { SearchModule } from './search/search.module';
+import { AnalyticsModule } from './analytics/analytics.module';
 import { databaseConfig } from './config/database.config';
 
 @Module({
@@ -59,6 +62,9 @@ import { databaseConfig } from './config/database.config';
     ProductsModule,
     CartModule,
     OrderModule,
+    PromotionModule,
+    SearchModule,
+    AnalyticsModule,
   ],
 })
 export class AppModule {}

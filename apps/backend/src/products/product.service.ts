@@ -1,5 +1,6 @@
 import {
   Injectable, NotFoundException, ConflictException, BadRequestException,
+  Optional,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, SelectQueryBuilder, IsNull, In } from 'typeorm';
@@ -26,6 +27,7 @@ export class ProductService {
     private readonly inventoryRepo: Repository<InventoryTransaction>,
     @InjectRepository(Category)
     private readonly categoryRepo: Repository<Category>,
+    @Optional() private readonly searchIndexer?: any,   // SearchIndexer — optional để tránh circular
   ) {}
 
   // ─── Danh sách sản phẩm (public) ──────────────────────────
@@ -135,7 +137,10 @@ export class ProductService {
       for (const ve of variantEntities) { await this.variantRepo.save(ve); }
     }
 
-    return this.findById(product.id);
+    const saved = await this.findById(product.id);
+    // Async index — không block response
+    this.searchIndexer?.indexOne(saved.id).catch(() => {});
+    return saved;
   }
 
   // ─── Cập nhật sản phẩm ────────────────────────────────────
@@ -154,15 +159,16 @@ export class ProductService {
         : [];
     }
 
-    const { variants, categoryIds, ...productData } = dto;
-    Object.assign(product, productData);
-    return this.productRepo.save(product);
+    const updated = await this.productRepo.save(product);
+    this.searchIndexer?.indexOne(updated.id).catch(() => {});
+    return updated;
   }
 
   // ─── Xóa sản phẩm (soft delete) ───────────────────────────
   async remove(id: string): Promise<void> {
     await this.findById(id);
     await this.productRepo.softDelete(id);
+    this.searchIndexer?.removeOne(id).catch(() => {});
   }
 
   // ─── Quản lý variants ─────────────────────────────────────
