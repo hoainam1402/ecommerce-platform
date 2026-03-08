@@ -68,7 +68,7 @@ export const productApi = {
     min_rating?: number; sort?: string
   }) => get<any[]>('/products', params),
 
-  detail: (slug: string) => get<any>(`/products/${slug}`),
+  detail: (slug: string) => get<any>(`/products/slug/${slug}`),
   reviews: (id: string, params?: any) => get<any[]>(`/products/${id}/reviews`, params),
   categories: () => get<any[]>('/categories'),
 }

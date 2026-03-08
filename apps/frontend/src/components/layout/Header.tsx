@@ -99,16 +99,16 @@ export function Header() {
                 <button onClick={() => setUserOpen(v => !v)}
                   className="flex items-center gap-2 btn-ghost px-2 py-1.5">
                   <div className="h-7 w-7 bg-primary/10 rounded-full flex items-center justify-center">
-                    <span className="text-primary text-xs font-bold">{user.full_name[0]}</span>
+                    <span className="text-primary text-xs font-bold">{user.fullName[0]}</span>
                   </div>
-                  <span className="text-sm font-medium hidden lg:block max-w-[100px] truncate">{user.full_name}</span>
+                  <span className="text-sm font-medium hidden lg:block max-w-[100px] truncate">{user.fullName}</span>
                   <ChevronDown className={cn('h-3.5 w-3.5 text-text-muted transition-transform', userOpen && 'rotate-180')} />
                 </button>
 
                 {userOpen && (
                   <div className="absolute right-0 top-full mt-1.5 w-52 bg-white rounded-2xl border border-border shadow-card-hover py-1.5 animate-slide-down">
                     <div className="px-4 py-2.5 border-b border-border mb-1">
-                      <p className="font-semibold text-sm">{user.full_name}</p>
+                      <p className="font-semibold text-sm">{user.fullName}</p>
                       <p className="text-xs text-text-muted">{user.email}</p>
                     </div>
                     {[

@@ -1,13 +1,13 @@
 'use client'
-import { useState } from 'react'
+import { productApi } from '@/lib/api'
+import { cn, discountPercent, formatPrice } from '@/lib/utils'
+import { useCartStore } from '@/stores/cart.store'
+import { useQuery } from '@tanstack/react-query'
+import { ChevronRight, Heart, Minus, Plus, RotateCcw, Shield, ShoppingCart, Star, Truck, Zap } from 'lucide-react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
-import { useQuery } from '@tanstack/react-query'
-import { Star, ShoppingCart, Zap, Shield, RotateCcw, Truck, ChevronRight, Minus, Plus, Heart } from 'lucide-react'
-import { productApi } from '@/lib/api'
-import { useCartStore } from '@/stores/cart.store'
-import { cn, formatPrice, discountPercent } from '@/lib/utils'
+import { useState } from 'react'
 
 export default function ProductDetailPage() {
   const { slug } = useParams<{ slug: string }>()
@@ -29,8 +29,8 @@ export default function ProductDetailPage() {
   const selectedVariant = product?.variants?.find((v: any) => v.id === variantId)
     ?? product?.variants?.[0]
 
-  const price     = selectedVariant?.sale_price ?? selectedVariant?.price ?? product?.sale_price ?? product?.base_price
-  const origPrice = selectedVariant?.price ?? product?.base_price
+  const price     = parseFloat(String(selectedVariant?.salePrice ?? selectedVariant?.price ?? product?.salePrice ?? product?.basePrice ?? 0))
+  const origPrice = parseFloat(String(selectedVariant?.price ?? product?.basePrice ?? 0))
   const hasDiscount = price && origPrice && price < origPrice
   const discount    = hasDiscount ? discountPercent(parseFloat(origPrice), parseFloat(price)) : 0
 
@@ -112,13 +112,13 @@ export default function ProductDetailPage() {
           <div className="flex items-center gap-3 flex-wrap">
             <div className="flex items-center gap-1">
               {Array.from({ length: 5 }).map((_, i) => (
-                <Star key={i} className={cn('h-4 w-4', i < Math.round(product.avg_rating ?? 0) ? 'fill-warning text-warning' : 'text-border')} />
+                <Star key={i} className={cn('h-4 w-4', i < Math.round(product.avgRating ?? 0) ? 'fill-warning text-warning' : 'text-border')} />
               ))}
-              <span className="font-bold text-sm ml-1">{product.avg_rating?.toFixed(1)}</span>
+              <span className="font-bold text-sm ml-1">{parseFloat(String(product.avgRating || 0)).toFixed(1)}</span>
             </div>
-            <span className="text-text-muted text-sm">({product.review_count} đánh giá)</span>
-            {product.sold_count > 0 && (
-              <span className="text-text-muted text-sm">• Đã bán {product.sold_count?.toLocaleString('vi-VN')}</span>
+            <span className="text-text-muted text-sm">({product.reviewCount} đánh giá)</span>
+            {product.soldCount > 0 && (
+              <span className="text-text-muted text-sm">• Đã bán {product.soldCount?.toLocaleString('vi-VN')}</span>
             )}
           </div>
 

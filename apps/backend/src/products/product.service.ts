@@ -1,18 +1,22 @@
 import {
-  Injectable, NotFoundException, ConflictException, BadRequestException,
+  BadRequestException,
+  ConflictException,
+  Injectable, NotFoundException,
   Optional,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, SelectQueryBuilder, IsNull, In } from 'typeorm';
-import { Product, ProductStatus } from './entities/product.entity';
-import { ProductVariant } from './entities/product-variant.entity';
-import { ProductImage } from './entities/product-image.entity';
-import { InventoryTransaction, InventoryReason } from './entities/inventory-transaction.entity';
-import { Category } from './entities/category.entity';
+import { In, IsNull, Repository, SelectQueryBuilder } from 'typeorm';
 import {
-  CreateProductDto, UpdateProductDto,
-  ProductQueryDto, AdjustStockDto,
+  AdjustStockDto,
+  CreateProductDto,
+  ProductQueryDto,
+  UpdateProductDto,
 } from './dto/product.dto';
+import { Category } from './entities/category.entity';
+import { InventoryReason, InventoryTransaction } from './entities/inventory-transaction.entity';
+import { ProductImage } from './entities/product-image.entity';
+import { ProductVariant } from './entities/product-variant.entity';
+import { Product, ProductStatus } from './entities/product.entity';
 
 @Injectable()
 export class ProductService {
@@ -31,7 +35,7 @@ export class ProductService {
   ) {}
 
   // ─── Danh sách sản phẩm (public) ──────────────────────────
-  async findAll(query: ProductQueryDto): Promise<{ data: Product[]; total: number; page: number; limit: number }> {
+  async findAll(query: ProductQueryDto): Promise<{ data: Product[]; meta: { total: number; page: number; limit: number; totalPages: number } }> {
     const { page = 1, limit = 20, q, categoryId, brandId, minPrice, maxPrice, minRating, sort, status } = query;
 
     const qb = this.productRepo.createQueryBuilder('p')
@@ -80,7 +84,12 @@ export class ProductService {
       .take(limit)
       .getManyAndCount();
 
-    return { data, total, page, limit };
+    const totalPages = Math.ceil(total / limit);
+
+    return {
+      data,
+      meta: { total, page, limit, totalPages }
+    };
   }
 
   // ─── Chi tiết sản phẩm ────────────────────────────────────

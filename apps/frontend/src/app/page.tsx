@@ -1,11 +1,11 @@
 'use client'
-import { useState, useEffect, useCallback } from 'react'
-import Link from 'next/link'
-import { useQuery } from '@tanstack/react-query'
-import { ChevronLeft, ChevronRight, Zap, ArrowRight, Smartphone, Laptop, Shirt, Dumbbell, BookOpen, Utensils } from 'lucide-react'
-import { productApi } from '@/lib/api'
 import { ProductCard, ProductCardSkeleton } from '@/components/ui/ProductCard'
-import { cn, formatPrice } from '@/lib/utils'
+import { productApi } from '@/lib/api'
+import { cn } from '@/lib/utils'
+import { useQuery } from '@tanstack/react-query'
+import { ArrowRight, BookOpen, ChevronLeft, ChevronRight, Dumbbell, Laptop, Shirt, Smartphone, Utensils, Zap } from 'lucide-react'
+import Link from 'next/link'
+import { useCallback, useEffect, useState } from 'react'
 
 const BANNERS = [
   { id: '1', badge: '⚡ Flash Sale', title: 'Siêu Sale\nCuối Tuần', sub: 'Giảm đến 50% hàng ngàn sản phẩm', cta: 'Mua ngay', href: '/products?sort=price_asc', gradient: 'from-slate-900 via-slate-800 to-slate-700' },
@@ -98,8 +98,10 @@ function useCountdown(ms: number) {
     return { h: Math.floor(d / 3_600_000), m: Math.floor((d % 3_600_000) / 60_000), s: Math.floor((d % 60_000) / 1000) }
   }
   const [t, setT] = useState(calc)
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => { setMounted(true) }, [])
   useEffect(() => { const id = setInterval(() => setT(calc), 1000); return () => clearInterval(id) }, [ms])
-  return t
+  return { ...t, mounted }
 }
 
 function Digit({ v, label }: { v: number; label: string }) {
@@ -161,11 +163,23 @@ export default function HomePage() {
               <Zap className="h-4 w-4 fill-white" /> FLASH SALE
             </div>
             <div className="flex items-center gap-1.5">
-              <Digit v={time.h} label="Giờ" />
-              <span className="font-bold text-slate-800 pb-3">:</span>
-              <Digit v={time.m} label="Phút" />
-              <span className="font-bold text-slate-800 pb-3">:</span>
-              <Digit v={time.s} label="Giây" />
+              {time.mounted ? (
+                <>
+                  <Digit v={time.h} label="Giờ" />
+                  <span className="font-bold text-slate-800 pb-3">:</span>
+                  <Digit v={time.m} label="Phút" />
+                  <span className="font-bold text-slate-800 pb-3">:</span>
+                  <Digit v={time.s} label="Giây" />
+                </>
+              ) : (
+                <>
+                  <Digit v={0} label="Giờ" />
+                  <span className="font-bold text-slate-800 pb-3">:</span>
+                  <Digit v={0} label="Phút" />
+                  <span className="font-bold text-slate-800 pb-3">:</span>
+                  <Digit v={0} label="Giây" />
+                </>
+              )}
             </div>
           </div>
           <Link href="/products" className="text-sm text-blue-600 font-medium hover:underline flex items-center gap-1">

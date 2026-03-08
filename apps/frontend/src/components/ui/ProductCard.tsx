@@ -1,16 +1,16 @@
 'use client'
+import { cn, discountPercent, formatPrice } from '@/lib/utils'
+import { useCartStore } from '@/stores/cart.store'
+import { Heart, ShoppingCart, Star } from 'lucide-react'
 import Image from 'next/image'
 import Link from 'next/link'
-import { Heart, ShoppingCart, Star } from 'lucide-react'
-import { cn, formatPrice, discountPercent } from '@/lib/utils'
-import { useCartStore } from '@/stores/cart.store'
 import { useState } from 'react'
 
 interface Product {
   id: string; name: string; slug: string
-  base_price: number; sale_price?: number | null
-  avg_rating: number; review_count: number; sold_count: number
-  images?: { url: string; is_primary: boolean }[]
+  basePrice: number; salePrice?: number | null
+  avgRating: number; reviewCount: number; soldCount: number
+  images?: { url: string; isPrimary: boolean }[]
   status?: string; brand?: { name: string }
   variants?: any[]
 }
@@ -23,12 +23,12 @@ export function ProductCard({ product, className }: Props) {
   const [wished, setWished] = useState(false)
   const [adding, setAdding] = useState(false)
 
-  const image = product.images?.find(i => i.is_primary)?.url
+  const image = product.images?.find(i => i.isPrimary)?.url
     ?? product.images?.[0]?.url
     ?? `https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=400&q=80`
 
-  const hasSale = product.sale_price && product.sale_price < product.base_price
-  const discount = hasSale ? discountPercent(product.base_price, product.sale_price!) : 0
+  const hasSale = product.salePrice && product.salePrice < product.basePrice
+  const discount = hasSale ? discountPercent(product.basePrice, product.salePrice!) : 0
 
   const handleAddToCart = async (e: React.MouseEvent) => {
     e.preventDefault()
@@ -62,16 +62,16 @@ export function ProductCard({ product, className }: Props) {
         <div className="flex items-center gap-1.5">
           <div className="flex">
             {Array.from({ length: 5 }).map((_, i) => (
-              <Star key={i} className={cn('h-3 w-3', i < Math.round(product.avg_rating) ? 'fill-amber-400 text-amber-400' : 'text-slate-200')} />
+              <Star key={i} className={cn('h-3 w-3', i < Math.round(product.avgRating) ? 'fill-amber-400 text-amber-400' : 'text-slate-200')} />
             ))}
           </div>
-          <span className="text-xs text-slate-400">({product.review_count})</span>
+          <span className="text-xs text-slate-400">({product.reviewCount})</span>
         </div>
         <div className="flex items-end gap-2">
-          <span className="font-bold text-red-500 text-lg leading-none">{formatPrice(hasSale ? product.sale_price : product.base_price)}</span>
-          {hasSale && <span className="text-slate-400 text-sm line-through">{formatPrice(product.base_price)}</span>}
+          <span className="font-bold text-red-500 text-lg leading-none">{formatPrice(hasSale ? product.salePrice : product.basePrice)}</span>
+          {hasSale && <span className="text-slate-400 text-sm line-through">{formatPrice(product.basePrice)}</span>}
         </div>
-        {product.sold_count > 0 && <p className="text-xs text-slate-400">Đã bán {product.sold_count.toLocaleString('vi-VN')}</p>}
+        {product.soldCount > 0 && <p className="text-xs text-slate-400">Đã bán {product.soldCount.toLocaleString('vi-VN')}</p>}
       </div>
     </Link>
   )

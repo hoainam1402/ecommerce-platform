@@ -1,11 +1,11 @@
 'use client'
-import { useState, useEffect } from 'react'
-import Link from 'next/link'
-import { Zap } from 'lucide-react'
-import { useQuery } from '@tanstack/react-query'
 import { ProductCard } from '@/components/ui/ProductCard'
 import { ProductCardSkeleton } from '@/components/ui/Skeleton'
 import { promotionApi } from '@/lib/api'
+import { useQuery } from '@tanstack/react-query'
+import { Zap } from 'lucide-react'
+import Link from 'next/link'
+import { useEffect, useState } from 'react'
 
 interface TimeLeft { hours: number; minutes: number; seconds: number }
 
@@ -19,13 +19,18 @@ function useCountdown(targetMs: number): TimeLeft {
     }
   }
   const [time, setTime] = useState<TimeLeft>(calc)
+  const [mounted, setMounted] = useState(false)
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
 
   useEffect(() => {
     const id = setInterval(() => setTime(calc), 1000)
     return () => clearInterval(id)
   }, [targetMs])
 
-  return time
+  return { ...time, mounted }
 }
 
 function Digit({ value, label }: { value: number; label: string }) {
@@ -68,11 +73,23 @@ export function FlashSale() {
             FLASH SALE
           </div>
           <div className="flex items-center gap-1.5">
-            <Digit value={time.hours}   label="Giờ" />
-            <span className="font-bold text-text-primary mb-3">:</span>
-            <Digit value={time.minutes} label="Phút" />
-            <span className="font-bold text-text-primary mb-3">:</span>
-            <Digit value={time.seconds} label="Giây" />
+            {time.mounted ? (
+              <>
+                <Digit value={time.hours}   label="Giờ" />
+                <span className="font-bold text-text-primary mb-3">:</span>
+                <Digit value={time.minutes} label="Phút" />
+                <span className="font-bold text-text-primary mb-3">:</span>
+                <Digit value={time.seconds} label="Giây" />
+              </>
+            ) : (
+              <>
+                <Digit value={0} label="Giờ" />
+                <span className="font-bold text-text-primary mb-3">:</span>
+                <Digit value={0} label="Phút" />
+                <span className="font-bold text-text-primary mb-3">:</span>
+                <Digit value={0} label="Giây" />
+              </>
+            )}
           </div>
         </div>
         <Link href="/promotions/flash-sale"

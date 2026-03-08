@@ -1,9 +1,9 @@
 'use client'
-import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
-import { authApi } from '@/lib/api'
+import { authApi } from '@/lib/api';
+import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 
-interface User { id: string; email: string; full_name: string; role: string; avatar_url?: string; loyalty_points?: number; loyalty_tier?: string }
+interface User { id: string; email: string; fullName: string; role: string; avatarUrl?: string; loyaltyPoints?: number; loyaltyTier?: string }
 
 interface AuthState {
   user: User | null

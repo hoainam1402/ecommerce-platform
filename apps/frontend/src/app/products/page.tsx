@@ -1,11 +1,11 @@
 'use client'
-import { useState, useEffect } from 'react'
-import { useSearchParams, useRouter } from 'next/navigation'
-import { useQuery } from '@tanstack/react-query'
-import { Filter, SlidersHorizontal, Grid3X3, List, ChevronDown, X } from 'lucide-react'
-import { productApi } from '@/lib/api'
 import { ProductCard, ProductCardSkeleton } from '@/components/ui/ProductCard'
+import { productApi } from '@/lib/api'
 import { cn } from '@/lib/utils'
+import { useQuery } from '@tanstack/react-query'
+import { ChevronDown, Filter, Grid3X3, List, SlidersHorizontal, X } from 'lucide-react'
+import { useRouter, useSearchParams } from 'next/navigation'
+import { useState } from 'react'
 
 const SORT_OPTIONS = [
   { value: 'newest',     label: 'Mới nhất' },
