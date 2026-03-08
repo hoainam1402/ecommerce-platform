@@ -1,8 +1,11 @@
 #!/bin/bash
-# dev-stop.sh — Dừng local environment
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT_DIR="$(dirname "$SCRIPT_DIR")"
+COMPOSE="docker compose -f $ROOT_DIR/docker/docker-compose.yml"
+
 GREEN='\033[0;32m'; NC='\033[0m'
 echo -e "${GREEN}▶ Dừng tất cả services...${NC}"
-docker compose --profile tools down
+$COMPOSE --profile tools down
 echo -e "${GREEN}[✓]${NC} Đã dừng. Data vẫn được giữ trong volumes."
 echo ""
 echo "  Xóa toàn bộ data:  bash scripts/dev-reset.sh"
